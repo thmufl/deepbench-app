@@ -8,18 +8,21 @@ import * as d3 from "d3";
 
 import * as tf from "@tensorflow/tfjs";
 
-import { FaPause, FaPlay, FaSearchPlus, FaSearchMinus } from "react-icons/fa";
+import { FaPause, FaPlay, FaExpand, FaCompress } from "react-icons/fa";
+
+import ColorControl from "./commons/ColorControl";
 
 const AtRandomAnimation = (props: {
   width: number;
   height: number;
+  author?: string;
   background: string;
   fill: string;
   circles: number;
   zoom: boolean;
 }) => {
   const { width, height } = props;
-
+  const [author, setAuthor] = useState(props.author || "deepbench@cyin.org");
   const [background, setBackground] = useState(props.background);
   const [fill, setFill] = useState(props.fill);
   const [circles, setCircles] = useState(props.circles);
@@ -35,18 +38,44 @@ const AtRandomAnimation = (props: {
     const getRandomData = (
       shape: number[]
     ): Array<{ x: number; y: number; r: number }> => {
-      let array = tf.abs(tf.randomNormal(shape)).arraySync() as number[][];
+      let array = tf.abs(tf.randomUniform(shape)).arraySync() as number[][];
       let x = array[0][0];
       let y = array[0][1];
-
-      return array.map((d) => {
-        return {
-          x: x * width * 0.5,
-          y: y * height * 0.5,
-          r: d[2] * height * 0.5,
-        };
-      });
+      return array
+        .map((d) => {
+          return {
+            x: x,
+            y: y,
+            r: d[2],
+          };
+        })
+        .sort(function (a, b) {
+          return a.r - b.r;
+        });
     };
+
+    const margin = {
+      top: height * 0.1,
+      right: width * 0.1,
+      bottom: height * 0.1,
+      left: width * 0.1,
+    };
+
+    const r = (height - margin.top - margin.bottom) * 0.66;
+
+    const xScale = d3
+      .scaleLinear()
+      .domain([0, 1])
+      .range([margin.left, width - margin.right]);
+
+    const yScale = d3
+      .scaleLinear()
+      .domain([0, 1])
+      .range([margin.top, height - margin.bottom]);
+
+    const rScale = d3.scaleLinear().domain([0, 1]).range([0, r]);
+
+    const opacityScale = d3.scaleSqrt().domain([0, 1]).range([1, 0]);
 
     if (!data) setData(getRandomData([circles, 3]));
     if (data && d3Container.current) {
@@ -65,12 +94,12 @@ const AtRandomAnimation = (props: {
       update
         .merge(enter)
         .style("fill", fill)
-        .style("opacity", 1 / circles)
         .transition()
         .duration(4000)
-        .attr("cx", (d) => d.x)
-        .attr("cy", (d) => d.y)
-        .attr("r", (d) => d.r);
+        .attr("cx", (d) => xScale(d.x))
+        .attr("cy", (d) => yScale(d.y))
+        .attr("r", (d) => rScale(d.r))
+        .style("opacity", (d, i) => opacityScale(d.r));
 
       // Remove old D3 elements
       update.exit().remove();
@@ -85,32 +114,41 @@ const AtRandomAnimation = (props: {
         .attr("y", height - 15)
         .attr("text-anchor", "end")
         .style("font-family", "Work Sans")
-        .style("font-size", "12pt")
-        .style("fill", "black")
+        .style("font-size", "11pt")
+        .style("opacity", 0.8);
+
+      svg
+        .selectAll(".label")
+        .style("fill", fill)
         .text(
-          `At Random I \u2022 thmufl@cyin.org \u2022 ${new Date().toLocaleDateString()}`
+          `At Random I \u2022 ${new Date().toLocaleDateString()} \u2022 ${author}`
         );
     }
-  }, [d3Container, width, height, data, background, fill, circles]);
+  }, [d3Container, width, height, data, author, background, fill, circles]);
 
   const handleOnChange = (event: any) => {
-    switch (event.currentTarget.id) {
-      case "formBackground":
-        setBackground(event.currentTarget.value);
+    const { name, value } = event.currentTarget;
+
+    switch (name) {
+      case "author":
+        setAuthor(value);
         break;
 
-      case "formFill":
-        setFill(event.currentTarget.value);
+      case "background":
+        setBackground(value);
         break;
 
-      case "formCircles":
-        let circles = +event.currentTarget.value;
-        setCircles(circles > 0 ? circles : 1);
+      case "fill":
+        setFill(value);
+        break;
+
+      case "circles":
+        setCircles(value > 0 ? parseInt(value) : 1);
         setData(undefined);
         break;
 
       default:
-        return new Error(`No setting: ${event.currentTarget.name}`);
+        return new Error(`No form element: ${name}`);
     }
   };
 
@@ -135,109 +173,77 @@ const AtRandomAnimation = (props: {
     <Fragment>
       <svg
         className="d3-component"
-        width={zoom ? 1920 * 0.9 : undefined}
-        height={zoom ? 1080 * 0.9 : undefined}
-        viewBox="0 0 1920 1080"
+        width={zoom ? window.innerWidth : undefined}
+        height={zoom ? (window.innerWidth * height) / width : undefined}
+        viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="xMinYMin meet"
         ref={d3Container}
       />
 
       <div className="d-flex justify-content-end mt-2">
-        <Button variant="primary" className="" onClick={handleToggleAnimation}>
+        <Button
+          variant="primary"
+          className="mr-2"
+          onClick={handleToggleAnimation}
+        >
           {animationId ? <FaPause /> : <FaPlay />}
         </Button>
-        &nbsp;
-        <Button variant="primary" className="" onClick={handleToggleZoom}>
-          {zoom ? <FaSearchMinus /> : <FaSearchPlus />}
+        <Button variant="primary" onClick={handleToggleZoom}>
+          {zoom ? <FaCompress /> : <FaExpand />}
         </Button>
       </div>
 
-      <Form className="mt-2">
+      <Form className="mt-3">
         <Row>
           <Col>
-            <Form.Group controlId="formBackground">
+            <Form.Group>
               <Form.Label>Background</Form.Label>
-              <Form.Control
-                as="select"
+              <ColorControl
+                name="background"
                 value={background}
-                onChange={(e) => handleOnChange(e)}
-              >
-                <option>red</option>
-                <option>green</option>
-                <option>blue</option>
-
-                <option>cyan</option>
-                <option>magenta</option>
-                <option>yellow</option>
-
-                <option>grey</option>
-                <option>lightgrey</option>
-                <option>dimgrey</option>
-                <option>white</option>
-                <option>black</option>
-
-                <option>lightblue</option>
-                <option>midnightblue</option>
-                <option>slateblue</option>
-
-                <option>orange</option>
-                <option>darkorange</option>
-                <option>purple</option>
-
-                <option>lemonchiffon</option>
-                <option>midnightblue</option>
-                <option>seagreen</option>
-              </Form.Control>
-              <Form.Text>The background color.</Form.Text>
+                onChange={handleOnChange}
+                colors="extended"
+              />
+              <Form.Text>Background color.</Form.Text>
             </Form.Group>
           </Col>
+
           <Col>
-            <Form.Group controlId="formFill">
+            <Form.Group>
               <Form.Label>Fill</Form.Label>
-              <Form.Control
-                as="select"
+              <ColorControl
+                name="fill"
                 value={fill}
-                onChange={(e) => handleOnChange(e)}
-              >
-                <option>red</option>
-                <option>green</option>
-                <option>blue</option>
-
-                <option>cyan</option>
-                <option>magenta</option>
-                <option>yellow</option>
-
-                <option>grey</option>
-                <option>lightgrey</option>
-                <option>dimgrey</option>
-                <option>white</option>
-                <option>black</option>
-
-                <option>lightblue</option>
-                <option>midnightblue</option>
-                <option>slateblue</option>
-
-                <option>orange</option>
-                <option>darkorange</option>
-                <option>purple</option>
-
-                <option>lemonchiffon</option>
-                <option>midnightblue</option>
-                <option>seagreen</option>
-              </Form.Control>
-              <Form.Text>The fill color of the circles.</Form.Text>
+                onChange={handleOnChange}
+                colors="extended"
+              />
+              <Form.Text>Fill color of the circles.</Form.Text>
             </Form.Group>
           </Col>
 
           <Col>
-            <Form.Group controlId="formCircles">
+            <Form.Group>
               <Form.Label>Circles</Form.Label>
               <Form.Control
                 type="number"
+                name="circles"
                 value={circles}
-                onChange={(e) => handleOnChange(e)}
+                onChange={handleOnChange}
               ></Form.Control>
-              <Form.Text>The number of circles of the animation.</Form.Text>
+              <Form.Text>Number of circles of the animation.</Form.Text>
+            </Form.Group>
+          </Col>
+
+          <Col className="col-5">
+            <Form.Group>
+              <Form.Label>Author</Form.Label>
+              <Form.Control
+                type="text"
+                name="author"
+                value={author}
+                onChange={handleOnChange}
+              ></Form.Control>
+              <Form.Text>Author of the animation.</Form.Text>
             </Form.Group>
           </Col>
         </Row>

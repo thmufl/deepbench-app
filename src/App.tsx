@@ -11,8 +11,6 @@ import SideNav from "./components/SideNav";
 import Home from "./components/Home";
 import AtRandomAnimationCard from "./components/AtRandomAnimationCard";
 
-import ModelInfoArtifact from "./components/ModelInfoArtifact";
-
 function App() {
   return (
     <Container>

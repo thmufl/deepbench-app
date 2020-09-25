@@ -1,12 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import Card from "react-bootstrap/Card";
 import AtRandomAnimation from "./AtRandomAnimation";
 
 const AtRandomAnimationCard = () => {
-  useEffect(() => {
-    //console.log("AtRandomCard: useEffect");
-  });
-
   return (
     <Card style={{ width: "auto" }}>
       <Card.Header>Header</Card.Header>
@@ -16,8 +12,9 @@ const AtRandomAnimationCard = () => {
           A simple animation of random circles
         </Card.Subtitle>
         <Card.Text>
-          Some quick example text to build on the card title and make up the
-          bulk of the card's content.
+          An animation of circles generated from a Tensorflow random normal
+          tensor. You can set background an fill color as well as the number of
+          circles drawn. Use play to loop the animation.
         </Card.Text>
         <AtRandomAnimation
           width={1920}
