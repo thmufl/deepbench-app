@@ -5,183 +5,170 @@ import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 
 import * as d3 from "d3";
-
-import * as tf from "@tensorflow/tfjs";
-
 import { FaPause, FaPlay, FaExpand, FaCompress } from "react-icons/fa";
-
 import ColorControl from "./commons/ColorControl";
 
-type Data = Array<{ x: number; y: number; r: number }>;
+type DataItem = { key: number; value: number };
 
-const AtRandomAnimation = (props: {
+const CirclesAnimation = (props: {
   width: number;
   height: number;
-  author?: string;
   palette: { background: string[]; a: string[]; b: string[] };
   background: string;
-  colorA: string[];
-  colorB: string[];
-  circles: number;
+  colorA: string;
+  colorB: string;
+  data: DataItem[];
   updateInterval: number;
+  animate: boolean;
+  animateScale: number;
+  author?: string;
 }) => {
   const [state, setState] = useState(props);
-  const [data, setData] = useState<Data>();
-  const [animationId, setAnimationId] = React.useState<NodeJS.Timeout>();
   const [zoom, setZoom] = React.useState(false);
 
   const {
     width,
     height,
-    author,
     palette,
     background,
     colorA,
     colorB,
-    circles,
+    data,
     updateInterval,
+    animate,
+    animateScale,
+    author,
   } = state;
 
   const d3Container = React.createRef<SVGSVGElement>();
 
   useEffect(() => {
-    const getRandomData = (shape: number[]): Data => {
-      let array = tf
-        .abs(tf.randomUniform(shape, 0, 1, "float32"))
-        .arraySync() as number[][];
-      let x = array[0][0];
-      let y = array[0][1];
-      return array
-        .map((d) => {
-          return {
-            x: x,
-            y: y,
-            r: d[2],
-          };
-        })
-        .sort(function (a, b) {
-          return b.r - a.r;
-        });
-    };
-
     const margin = {
-      top: 5,
-      right: 5,
-      bottom: 5,
-      left: 5,
+      top: 15,
+      right: 15,
+      bottom: 15,
+      left: 15,
     };
 
     const cx = (width - margin.right - margin.left) / 2;
     const cy = (height - margin.top - margin.bottom) / 2;
-    const r = (height - margin.top - margin.bottom) * 0.5;
+    const r = (height - margin.top - margin.bottom) / 2;
 
-    const rScale = d3.scaleLinear().domain([0, 1]).range([0, r]);
-    const opacityScale = d3.scaleSqrt().domain([0, 1]).range([0.8, 0.1]);
+    const rScale: any = d3.scaleLinear().domain([0, 1]).range([0, r]);
+    const colorScale: any = d3.interpolateHsl(colorA, colorB);
+    const opacityScale: any = d3.scaleSqrt().domain([0, 1]).range([0.7, 0.05]);
 
-    const getRandomColor = (colors: string[]): string => {
-      return colors[Math.round(Math.random() * (colors.length - 1))];
+    const render = (data: DataItem[]) => {
+      if (data && d3Container.current) {
+        const svg = d3.select(d3Container.current);
+
+        // Bind D3 data
+        const update = svg
+          .style("background", background)
+          .selectAll<SVGCircleElement, DataItem>("circle")
+          .data(data, (d) => d.key);
+
+        // Enter new D3 elements
+        const enter = update
+          .enter()
+          .append("circle")
+          .attr("cx", cx)
+          .attr("cy", cy);
+
+        // Update existing D3 elements
+
+        update
+          .merge(enter)
+          .transition()
+          .duration(updateInterval)
+          .ease(d3.easeLinear)
+          .attr("r", (d) => rScale(d.value))
+          .style("fill", (d) => colorScale(d.value))
+          .style("opacity", (d) => opacityScale(d.value));
+
+        // Remove old D3 elements
+        update
+          .exit()
+          .transition()
+          .duration(updateInterval)
+          .ease(d3.easeLinear)
+          .style("opacity", 0)
+          .remove();
+
+        svg
+          .selectAll(".label")
+          .data([0])
+          .enter()
+          .append("text")
+          .attr("class", "label")
+          .attr("x", width - 15)
+          .attr("y", height - 15)
+          .attr("text-anchor", "end")
+          .style("font-family", "Work Sans")
+          .style("font-size", "11pt")
+          .style("opacity", 0.8);
+
+        svg
+          .selectAll(".label")
+          .style("fill", "lightgrey")
+          .text(
+            `Color Circles I \u2022 ${background}/${colorA}/${colorB} \u2022 ${new Date().toLocaleDateString()} \u2022 ${author}`
+          );
+      }
     };
 
-    let currentColors = [getRandomColor(colorA), getRandomColor(colorB)];
-    //console.log("color", colorA, colorB);
-    //console.log("currentColors", currentColors);
+    console.log("animate", animate);
 
-    const colorScale = d3.interpolateHsl(currentColors[0], currentColors[1]);
+    let s = { ...state };
+    let lastKey = s.data.length;
 
-    if (!data) setData(getRandomData([+circles, 3]));
-    if (data && d3Container.current) {
-      const svg = d3.select(d3Container.current);
+    let interval = d3.interval((elapsed) => {
+      if (animate) {
+        s.data.push({ key: ++lastKey, value: Math.random() / 100 });
+        s.data.forEach((item) => (item.value *= animateScale));
+      }
+      // clean up and sort data
+      s.data.forEach((item, index, object) => {
+        if (rScale(item.value) > r) {
+          console.log(
+            `removing item ${index} (value: ${item.value}, data length: ${s.data.length})`
+          );
+          object.splice(index, 1);
+        }
+      });
 
-      // Bind D3 data
-      const update = svg
-        .style("background", background)
-        .selectAll<SVGCircleElement, number[]>("circle")
-        .data(data);
+      s.data = s.data.sort((a, b) => b.value - a.value);
+      console.log("s.data", s.data);
 
-      // Enter new D3 elements
-      const enter = update
-        .enter()
-        .append("circle")
-        .attr("cx", cx)
-        .attr("cy", cy);
-
-      // Update existing D3 elements
-      /*
-      update
-        .merge(enter)
-        .transition()
-        .style("opacity", (d) => opacityScale(d.r))
-        .duration(0.99 * updateInterval)
-        .ease(d3.easeSin)
-        .attr("r", (d) => rScale(d.r))
-        .style("fill", (d) => colorScale(d.r));
-      */
-      // Remove old D3 elements
-      update.exit().remove();
-
-      svg
-        .selectAll(".label")
-        .data([0])
-        .enter()
-        .append("text")
-        .attr("class", "label")
-        .attr("x", width - 15)
-        .attr("y", height - 15)
-        .attr("text-anchor", "end")
-        .style("font-family", "Work Sans")
-        .style("font-size", "11pt")
-        .style("opacity", 0.8);
-
-      svg
-        .selectAll(".label")
-        .style("fill", "grey")
-        .text(
-          `Color Circles I \u2022 ${background}/${currentColors[0]}/${
-            currentColors[1]
-          } \u2022 ${new Date().toLocaleDateString()} \u2022 ${author}`
-        );
-    }
+      render(s.data);
+      if (!animate) {
+        interval.stop();
+      }
+    }, updateInterval);
   }, [
     d3Container,
     width,
     height,
-    data,
-    author,
     background,
     colorA,
     colorB,
-    circles,
+    data,
     updateInterval,
+    animate,
+    animateScale,
+    author,
   ]);
 
   const handleOnChange = (event: any) => {
     const { name, value } = event.currentTarget;
     setState({ ...state, [name]: value });
     if (name === "circles") {
-      setData(undefined);
+      //setData(undefined);
     }
   };
 
-  const handleOnChangeMultiple = (event: any) => {
-    const { name, selectedOptions } = event.currentTarget;
-    let values = [];
-    for (let i = 0; i < selectedOptions.length; i++) {
-      values.push(selectedOptions.item(i).value);
-    }
-    setState({ ...state, [name]: values });
-  };
-
-  const handleToggleAnimation = () => {
-    if (animationId) {
-      clearInterval(animationId);
-      setAnimationId(undefined);
-      return;
-    }
-
-    let id = setInterval(() => {
-      setData(undefined);
-    }, updateInterval);
-    setAnimationId(id);
+  const handleToggleAnimate = () => {
+    setState({ ...state, animate: !animate });
   };
 
   const handleToggleZoom = () => {
@@ -194,8 +181,8 @@ const AtRandomAnimation = (props: {
         className="d3-component"
         //width={zoom ? window.innerWidth : undefined}
         //height={zoom ? (window.innerWidth * height) / width : undefined}
-        width={zoom ? (1920 / 3) * 2 : undefined}
-        height={zoom ? (1080 / 3) * 2 : undefined}
+        width={zoom ? (1920 / 3) * 1.8 : undefined}
+        height={zoom ? (1080 / 3) * 1.8 : undefined}
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="xMinYMin meet"
         ref={d3Container}
@@ -205,9 +192,9 @@ const AtRandomAnimation = (props: {
         <Button
           variant="primary"
           className="mr-2"
-          onClick={handleToggleAnimation}
+          onClick={handleToggleAnimate}
         >
-          {animationId ? <FaPause /> : <FaPlay />}
+          {animate ? <FaPause /> : <FaPlay />}
         </Button>
         <Button variant="primary" onClick={handleToggleZoom}>
           {zoom ? <FaCompress /> : <FaExpand />}
@@ -235,8 +222,7 @@ const AtRandomAnimation = (props: {
               <ColorControl
                 name="colorA"
                 value={colorA}
-                multiple={true}
-                onChange={handleOnChangeMultiple}
+                onChange={handleOnChange}
                 colors={palette.a}
               />
               <Form.Text>1st color of the circles.</Form.Text>
@@ -249,8 +235,7 @@ const AtRandomAnimation = (props: {
               <ColorControl
                 name="colorB"
                 value={colorB}
-                multiple={true}
-                onChange={handleOnChangeMultiple}
+                onChange={handleOnChange}
                 colors={palette.b}
               />
               <Form.Text>2nd color of the circles.</Form.Text>
@@ -261,14 +246,14 @@ const AtRandomAnimation = (props: {
         <Row>
           <Col>
             <Form.Group>
-              <Form.Label>Circles</Form.Label>
+              <Form.Label>Animate Scale</Form.Label>
               <Form.Control
                 type="number"
-                name="circles"
-                value={circles}
+                name="animateScale"
+                value={animateScale}
                 onChange={handleOnChange}
               ></Form.Control>
-              <Form.Text>Number of circles of the animation.</Form.Text>
+              <Form.Text>Scale per step in animations.</Form.Text>
             </Form.Group>
           </Col>
 
@@ -279,7 +264,7 @@ const AtRandomAnimation = (props: {
                 type="number"
                 name="updateInterval"
                 value={updateInterval}
-                disabled={animationId ? true : false}
+                disabled={animate ? true : false}
                 onChange={handleOnChange}
               ></Form.Control>
               <Form.Text>The update interval in milliseconds.</Form.Text>
@@ -303,4 +288,4 @@ const AtRandomAnimation = (props: {
     </Fragment>
   );
 };
-export default AtRandomAnimation;
+export default CirclesAnimation;

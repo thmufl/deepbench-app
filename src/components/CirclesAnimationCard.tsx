@@ -1,14 +1,14 @@
 import React, { useEffect } from "react";
 import * as htmlColors from "./commons/HTMLColors";
 import Card from "react-bootstrap/Card";
-import AtRandomAnimation from "./AtRandomAnimation";
+import CirclesAnimation from "./CirclesAnimation";
 
-const AtRandomAnimationCard = () => {
+const CirclesAnimationCard = () => {
   return (
     <Card style={{ width: "auto" }}>
       <Card.Header>Header</Card.Header>
       <Card.Body>
-        <Card.Title>At Random</Card.Title>
+        <Card.Title>Circles Animation</Card.Title>
         <Card.Subtitle className="mb-2 text-muted">
           A simple animation of random circles
         </Card.Subtitle>
@@ -17,7 +17,7 @@ const AtRandomAnimationCard = () => {
           tensor. You can set background an fill color as well as the number of
           circles drawn. Use play to loop the animation.
         </Card.Text>
-        <AtRandomAnimation
+        <CirclesAnimation
           width={1920}
           height={1080}
           palette={{
@@ -25,11 +25,17 @@ const AtRandomAnimationCard = () => {
             a: htmlColors.extended,
             b: htmlColors.extended,
           }}
-          background="darkgrey"
-          colorA={["crimson"]}
-          colorB={["mintcream"]}
-          circles={32}
-          updateInterval={3000}
+          background="gainsboro"
+          colorA="black"
+          colorB="antiquewhite"
+          data={[
+            { key: 0, value: 0.2 },
+            { key: 1, value: 0.4 },
+            { key: 2, value: 0.8 },
+          ]}
+          updateInterval={1500}
+          animate={false}
+          animateScale={1.15}
           author="deepbench@cyin.org"
         />
         <Card.Link href="#">Card Link</Card.Link>
@@ -38,4 +44,4 @@ const AtRandomAnimationCard = () => {
     </Card>
   );
 };
-export default AtRandomAnimationCard;
+export default CirclesAnimationCard;
