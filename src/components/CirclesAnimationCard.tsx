@@ -1,4 +1,5 @@
-import React, { useEffect } from "react";
+// eslint-disable-next-line
+import React from "react";
 import * as htmlColors from "./commons/HTMLColors";
 import Card from "react-bootstrap/Card";
 import CirclesAnimation from "./CirclesAnimation";
@@ -20,23 +21,35 @@ const CirclesAnimationCard = () => {
         <CirclesAnimation
           width={1920}
           height={1080}
+          margin={{
+            top: 20,
+            right: 20,
+            bottom: 20,
+            left: 20,
+          }}
           palette={{
             background: htmlColors.extended,
-            a: htmlColors.extended,
-            b: htmlColors.extended,
+            inner: htmlColors.extended,
+            outer: htmlColors.extended,
+            label: htmlColors.extended,
           }}
-          background="gainsboro"
-          colorA="black"
-          colorB="antiquewhite"
+          colorBackground="gainsboro"
+          colorInner="black"
+          colorOuter="antiquewhite"
+          opacityInner={0.8}
+          opacityOuter={0.2}
           data={[
-            { key: 0, value: 0.2 },
-            { key: 1, value: 0.4 },
-            { key: 2, value: 0.8 },
+            { key: 0, value: 0.05 },
+            { key: 1, value: 0.1 },
+            { key: 2, value: 0.2 },
+            { key: 3, value: 0.4 },
+            { key: 4, value: 0.8 },
           ]}
-          updateInterval={1500}
           animate={false}
           animateScale={1.15}
-          author="deepbench@cyin.org"
+          animateInterval={1000}
+          label="deepbench@cyin.org"
+          labelColor="grey"
         />
         <Card.Link href="#">Card Link</Card.Link>
       </Card.Body>

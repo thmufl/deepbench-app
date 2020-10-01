@@ -1,3 +1,4 @@
+// eslint-disable-next-line
 import React, { useState, useEffect, useRef, Fragment } from "react";
 import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
@@ -13,162 +14,212 @@ type DataItem = { key: number; value: number };
 const CirclesAnimation = (props: {
   width: number;
   height: number;
-  palette: { background: string[]; a: string[]; b: string[] };
-  background: string;
-  colorA: string;
-  colorB: string;
+  margin: { top: number; right: number; bottom: number; left: number };
+  palette: {
+    background: string[];
+    inner: string[];
+    outer: string[];
+    label: string[];
+  };
+  colorBackground: string;
+  colorInner: string;
+  colorOuter: string;
+  opacityInner: number;
+  opacityOuter: number;
   data: DataItem[];
-  updateInterval: number;
   animate: boolean;
   animateScale: number;
-  author?: string;
+  animateInterval: number;
+  animateIntervalId?: NodeJS.Timeout | null;
+  label?: string;
+  labelColor?: string;
 }) => {
   const [state, setState] = useState(props);
-  const [zoom, setZoom] = React.useState(false);
+  const [zoom, setZoom] = useState(false);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   const {
     width,
     height,
     palette,
-    background,
-    colorA,
-    colorB,
+    colorBackground,
+    colorInner,
+    colorOuter,
+    opacityInner,
+    opacityOuter,
     data,
-    updateInterval,
     animate,
     animateScale,
-    author,
+    animateInterval,
+    animateIntervalId,
+    label,
+    labelColor,
   } = state;
 
-  const d3Container = React.createRef<SVGSVGElement>();
-
   useEffect(() => {
-    const margin = {
-      top: 15,
-      right: 15,
-      bottom: 15,
-      left: 15,
-    };
+    const {
+      width,
+      height,
+      margin,
+      palette,
+      colorBackground,
+      colorInner,
+      colorOuter,
+      opacityInner,
+      opacityOuter,
+      data,
+      animateInterval,
+      label,
+      labelColor,
+    } = state;
 
-    const cx = (width - margin.right - margin.left) / 2;
-    const cy = (height - margin.top - margin.bottom) / 2;
+    const cx = (width - margin.left) / 2;
+    const cy = (height - margin.bottom) / 2;
     const r = (height - margin.top - margin.bottom) / 2;
 
-    const rScale: any = d3.scaleLinear().domain([0, 1]).range([0, r]);
-    const colorScale: any = d3.interpolateHsl(colorA, colorB);
-    const opacityScale: any = d3.scaleSqrt().domain([0, 1]).range([0.7, 0.05]);
-
-    const render = (data: DataItem[]) => {
-      if (data && d3Container.current) {
-        const svg = d3.select(d3Container.current);
-
-        // Bind D3 data
-        const update = svg
-          .style("background", background)
-          .selectAll<SVGCircleElement, DataItem>("circle")
-          .data(data, (d) => d.key);
-
-        // Enter new D3 elements
-        const enter = update
-          .enter()
-          .append("circle")
-          .attr("cx", cx)
-          .attr("cy", cy);
-
-        // Update existing D3 elements
-
-        update
-          .merge(enter)
-          .transition()
-          .duration(updateInterval)
-          .ease(d3.easeLinear)
-          .attr("r", (d) => rScale(d.value))
-          .style("fill", (d) => colorScale(d.value))
-          .style("opacity", (d) => opacityScale(d.value));
-
-        // Remove old D3 elements
-        update
-          .exit()
-          .transition()
-          .duration(updateInterval)
-          .ease(d3.easeLinear)
-          .style("opacity", 0)
-          .remove();
-
-        svg
-          .selectAll(".label")
-          .data([0])
-          .enter()
-          .append("text")
-          .attr("class", "label")
-          .attr("x", width - 15)
-          .attr("y", height - 15)
-          .attr("text-anchor", "end")
-          .style("font-family", "Work Sans")
-          .style("font-size", "11pt")
-          .style("opacity", 0.8);
-
-        svg
-          .selectAll(".label")
-          .style("fill", "lightgrey")
-          .text(
-            `Color Circles I \u2022 ${background}/${colorA}/${colorB} \u2022 ${new Date().toLocaleDateString()} \u2022 ${author}`
-          );
-      }
+    const randomColor = (palette: string[]) => {
+      let i = Math.round(((Math.random() * 100) / 100) * palette.length);
+      return palette[i];
     };
 
-    console.log("animate", animate);
+    const rScale: any = d3.scaleLinear().domain([0, 1]).range([0, r]);
+    const colorScale: any = d3.interpolateHsl(
+      colorInner === "random" ? randomColor(palette.inner) : colorInner,
+      colorOuter === "random" ? randomColor(palette.outer) : colorOuter
+    );
+    const opacityScale: any = d3
+      .scaleLinear()
+      .domain([0, 1])
+      .range([opacityInner, opacityOuter]);
 
-    let s = { ...state };
-    let lastKey = s.data.length;
-
-    let interval = d3.interval((elapsed) => {
-      if (animate) {
-        s.data.push({ key: ++lastKey, value: Math.random() / 100 });
-        s.data.forEach((item) => (item.value *= animateScale));
-      }
+    const prepareData = (data: DataItem[]) => {
       // clean up and sort data
-      s.data.forEach((item, index, object) => {
-        if (rScale(item.value) > r) {
-          console.log(
-            `removing item ${index} (value: ${item.value}, data length: ${s.data.length})`
-          );
+      const limit = Math.sqrt(width * width + height * height);
+      data.forEach((item: DataItem, index: number, object: any) => {
+        if (rScale(item.value) > limit) {
           object.splice(index, 1);
         }
       });
+      return data.sort((a: DataItem, b: DataItem) => b.value - a.value);
+    };
 
-      s.data = s.data.sort((a, b) => b.value - a.value);
-      console.log("s.data", s.data);
+    if (data && svgRef.current) {
+      const svg = d3.select(svgRef.current);
 
-      render(s.data);
-      if (!animate) {
-        interval.stop();
-      }
-    }, updateInterval);
-  }, [
-    d3Container,
-    width,
-    height,
-    background,
-    colorA,
-    colorB,
-    data,
-    updateInterval,
-    animate,
-    animateScale,
-    author,
-  ]);
+      svg
+        .transition()
+        .duration(animateInterval)
+        .style(
+          "background",
+          colorBackground === "random"
+            ? randomColor(palette.background)
+            : colorBackground
+        );
+
+      // Bind D3 data
+      const update = svg
+        .selectAll<SVGCircleElement, DataItem>("circle")
+        .data(prepareData(data), (d) => d.key);
+
+      // Enter new D3 elements
+      const enter = update
+        .enter()
+        .append("circle")
+        .attr("cx", cx)
+        .attr("cy", cy);
+
+      // Update existing D3 elements
+      update
+        .merge(enter)
+        .transition()
+        .duration(animateInterval)
+        .ease(d3.easeLinear)
+        .attr("r", (d) => rScale(d.value))
+        .style("fill", (d) => colorScale(d.value))
+        .style("opacity", (d) => opacityScale(d.value));
+
+      // Remove old D3 elements
+      update
+        .exit()
+        .transition()
+        .duration(animateInterval)
+        .ease(d3.easeLinear)
+        .style("opacity", 0)
+        .remove();
+
+      svg
+        .selectAll(".label")
+        .data([0])
+        .enter()
+        .append("text")
+        .attr("class", "label")
+        .attr("x", width - 20)
+        .attr("y", height - 20)
+        .attr("text-anchor", "end")
+        .style("font-family", "Work Sans")
+        .style("font-size", "11pt")
+        .style("opacity", 0.9);
+
+      svg
+        .selectAll(".label")
+        .style("fill", labelColor || "grey")
+        .text(
+          `Circles Animation \u2022 ${colorBackground}-${colorInner}-${colorOuter} \u2022 ${new Date().toLocaleDateString()} \u2022 ${label}`
+        );
+    }
+    // Ensure interval ist cleared on unmount
+    // if (animateIntervalId) return clearInterval(animateIntervalId);
+  }, [state, svgRef]);
 
   const handleOnChange = (event: any) => {
+    if (animateIntervalId) clearInterval(animateIntervalId);
     const { name, value } = event.currentTarget;
-    setState({ ...state, [name]: value });
-    if (name === "circles") {
-      //setData(undefined);
-    }
+    setState({
+      ...state,
+      [name]: value,
+      animate: false,
+      animateIntervalId: null,
+    });
   };
 
   const handleToggleAnimate = () => {
-    setState({ ...state, animate: !animate });
+    if (!animate && !animateIntervalId) {
+      const nextNumber = () => {
+        let min = d3.min(data, (d) => d.value) || 1;
+
+        let n = Math.random();
+        while (n > min || n < 0.001) {
+          n = Math.random();
+        }
+        return n;
+      };
+
+      const maxKey = 100000;
+      let key = d3.max(data, (d) => d.key) || 0;
+      key = key > maxKey ? key - maxKey : key;
+
+      const id = setInterval(() => {
+        data.push({ key: ++key, value: nextNumber() });
+        data.forEach((item) => (item.value *= animateScale));
+        setState({
+          ...state,
+          animate: true,
+          animateIntervalId: id,
+          data: data,
+        });
+      }, animateInterval);
+
+      setState({
+        ...state,
+        animate: true,
+        animateIntervalId: id,
+      });
+    }
+
+    if (animate && animateIntervalId) {
+      clearInterval(animateIntervalId);
+      setState({ ...state, animate: false, animateIntervalId: null });
+    }
   };
 
   const handleToggleZoom = () => {
@@ -185,7 +236,7 @@ const CirclesAnimation = (props: {
         height={zoom ? (1080 / 3) * 1.8 : undefined}
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="xMinYMin meet"
-        ref={d3Container}
+        ref={svgRef}
       />
 
       <div className="d-flex justify-content-end mt-2">
@@ -205,12 +256,12 @@ const CirclesAnimation = (props: {
         <Row>
           <Col>
             <Form.Group>
-              <Form.Label>Background</Form.Label>
+              <Form.Label>Background color</Form.Label>
               <ColorControl
-                name="background"
-                value={background}
+                name="colorBackground"
+                value={colorBackground}
                 onChange={handleOnChange}
-                colors={palette.background}
+                colors={palette.background.concat(["random"])}
               />
               <Form.Text>Background color.</Form.Text>
             </Form.Group>
@@ -218,69 +269,114 @@ const CirclesAnimation = (props: {
 
           <Col>
             <Form.Group>
-              <Form.Label>Color A</Form.Label>
+              <Form.Label>Inner color</Form.Label>
               <ColorControl
-                name="colorA"
-                value={colorA}
+                name="colorInner"
+                value={colorInner}
                 onChange={handleOnChange}
-                colors={palette.a}
+                colors={palette.inner.concat(["random"])}
               />
-              <Form.Text>1st color of the circles.</Form.Text>
+              <Form.Text>Inner color of the circles.</Form.Text>
             </Form.Group>
           </Col>
 
           <Col>
             <Form.Group>
-              <Form.Label>Color B</Form.Label>
+              <Form.Label>Outer color</Form.Label>
               <ColorControl
-                name="colorB"
-                value={colorB}
+                name="colorOuter"
+                value={colorOuter}
                 onChange={handleOnChange}
-                colors={palette.b}
+                colors={palette.outer.concat(["random"])}
               />
-              <Form.Text>2nd color of the circles.</Form.Text>
+              <Form.Text>Outer color of the circles.</Form.Text>
             </Form.Group>
           </Col>
         </Row>
 
         <Row>
+          <Col></Col>
+          <Col>
+            <Form.Group>
+              <Form.Label>Inner opacity</Form.Label>
+              <Form.Control
+                type="number"
+                step={0.01}
+                name="opacityInner"
+                value={opacityInner}
+                onChange={handleOnChange}
+              />
+              <Form.Text>Inner opacity of the circles.</Form.Text>
+            </Form.Group>
+          </Col>
+          <Col>
+            <Form.Group>
+              <Form.Label>Outer opacity</Form.Label>
+              <Form.Control
+                type="number"
+                step={0.01}
+                name="opacityOuter"
+                value={opacityOuter}
+                onChange={handleOnChange}
+              />
+              <Form.Text>Outer opacity of the circles.</Form.Text>
+            </Form.Group>
+          </Col>
+        </Row>
+
+        <Row>
+          <Col></Col>
           <Col>
             <Form.Group>
               <Form.Label>Animate Scale</Form.Label>
               <Form.Control
                 type="number"
+                step={0.01}
                 name="animateScale"
                 value={animateScale}
                 onChange={handleOnChange}
               ></Form.Control>
-              <Form.Text>Scale per step in animations.</Form.Text>
+              <Form.Text>Scale per animation cycle.</Form.Text>
             </Form.Group>
           </Col>
 
           <Col>
             <Form.Group>
-              <Form.Label>Update Interval</Form.Label>
+              <Form.Label>Animation Interval</Form.Label>
               <Form.Control
                 type="number"
-                name="updateInterval"
-                value={updateInterval}
-                disabled={animate ? true : false}
+                step={100}
+                name="animateInterval"
+                value={animateInterval}
                 onChange={handleOnChange}
               ></Form.Control>
-              <Form.Text>The update interval in milliseconds.</Form.Text>
+              <Form.Text>The animation interval in milliseconds.</Form.Text>
             </Form.Group>
           </Col>
-
-          <Col className="col-4">
+        </Row>
+        <Row>
+          <Col className="col-8">
             <Form.Group>
-              <Form.Label>Author</Form.Label>
+              <Form.Label>Label</Form.Label>
               <Form.Control
                 type="text"
-                name="author"
-                value={author}
+                name="label"
+                value={label}
                 onChange={handleOnChange}
               ></Form.Control>
-              <Form.Text>Author of the animation.</Form.Text>
+              <Form.Text>Label of the animation.</Form.Text>
+            </Form.Group>
+          </Col>
+          <Col>
+            <Form.Group>
+              <Form.Label>Label Color</Form.Label>
+              <ColorControl
+                name="labelColor"
+                value={labelColor}
+                onChange={handleOnChange}
+                colors={palette.label}
+              />
+              <Form.Text>Color of the label.</Form.Text>
             </Form.Group>
           </Col>
         </Row>
