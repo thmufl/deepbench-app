@@ -1,3 +1,4 @@
+// eslint-disable-next-line
 import React from "react";
 import { Route, Switch, Redirect } from "react-router-dom";
 
@@ -9,7 +10,7 @@ import "./App.css";
 
 import SideNav from "./components/SideNav";
 import Home from "./components/Home";
-import CirclesAnimationCard from "./components/CirclesAnimationCard";
+import ColorCircleCard from "./components/ColorCircleCard";
 import AtRandomAnimationCard from "./components/AtRandomAnimationCard";
 
 function App() {
@@ -20,7 +21,7 @@ function App() {
           <SideNav
             items={[
               { title: "Home", path: "/home" },
-              { title: "Circles", path: "/circles" },
+              { title: "Color Circle", path: "/color-circle" },
               { title: "At Random", path: "/random" },
               { title: "Learning OR", path: "/or" },
               { title: "Learning XOR", path: "/xor" },
@@ -30,7 +31,7 @@ function App() {
         <Col sm={10}>
           <Switch>
             <Route path="/home" component={Home} />
-            <Route path="/circles" component={CirclesAnimationCard} />
+            <Route path="/color-circle" component={ColorCircleCard} />
             <Route path="/random" component={AtRandomAnimationCard} />
 
             <Redirect from="/" exact to="/home" />
