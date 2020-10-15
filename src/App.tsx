@@ -10,6 +10,7 @@ import "./App.css";
 
 import SideNav from "./components/SideNav";
 import Home from "./components/Home";
+import PerceptronCard from "./components/PerceptronCard";
 import ColorCircleCard from "./components/ColorCircleCard";
 import AtRandomAnimationCard from "./components/AtRandomAnimationCard";
 
@@ -21,6 +22,7 @@ function App() {
           <SideNav
             items={[
               { title: "Home", path: "/home" },
+              { title: "Perceptron", path: "/perceptron" },
               { title: "Color Circle", path: "/color-circle" },
               { title: "At Random", path: "/random" },
               { title: "Learning OR", path: "/or" },
@@ -31,6 +33,7 @@ function App() {
         <Col sm={10}>
           <Switch>
             <Route path="/home" component={Home} />
+            <Route path="/perceptron" component={PerceptronCard} />
             <Route path="/color-circle" component={ColorCircleCard} />
             <Route path="/random" component={AtRandomAnimationCard} />
 
