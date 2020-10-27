@@ -7,6 +7,20 @@
   pointer-events: none;
 }
 
+.current-path {
+  stroke: magenta;
+  stroke-width: 12;
+  opacity: 0.9;
+  fill: none;
+}
+
+.last-path {
+  stroke: yellow;
+  stroke-width: 2;
+  opacity: 0.9;
+  fill: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .App-logo {
     animation: App-logo-spin infinite 20s linear;

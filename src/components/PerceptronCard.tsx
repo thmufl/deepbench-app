@@ -50,29 +50,29 @@ const shuffle = (array: any[]) => {
 // }
 
 // Random Path
-data.push({ x: 0, y: Math.random() });
-for (let i = 1; i < DATA_POINTS; i++) {
-  let x = i / DATA_POINTS;
-  let delta = Math.random() / (1000000 * DATA_POINTS);
-  let y = Math.random() > 0.5 ? data[i - 1].y + delta : data[i - 1].y - delta;
-  data.push({ x, y });
-}
-
-// Curve
-// const a = Math.random() * 2 * Math.PI;
-// const b = Math.random() * 2 * Math.PI;
-// const c = Math.random() * 2 * Math.PI;
-
+// data.push({ x: 0, y: Math.random() });
 // for (let i = 1; i < DATA_POINTS; i++) {
 //   let x = i / DATA_POINTS;
-//   data.push({
-//     x,
-//     y:
-//       Math.sin(a * x * x) +
-//       Math.cos(b * x * x * x) -
-//       Math.cos(c * x * x * x * x),
-//   });
+//   let delta = Math.random() / (1000000 * DATA_POINTS);
+//   let y = Math.random() > 0.5 ? data[i - 1].y + delta : data[i - 1].y - delta;
+//   data.push({ x, y });
 // }
+
+// Curve
+const a = Math.random() * 2 * Math.PI;
+const b = Math.random() * 2 * Math.PI;
+const c = Math.random() * 2 * Math.PI;
+
+for (let i = 1; i < DATA_POINTS; i++) {
+  let x = i / DATA_POINTS;
+  data.push({
+    x,
+    y:
+      Math.sin(a * x * x) +
+      Math.cos(b * x * x * x) -
+      Math.cos(c * x * x * x * x),
+  });
+}
 
 console.log(data);
 data = shuffle(data);
@@ -105,8 +105,20 @@ const PerceptronCard = () => {
           label="deep@cyin.org"
           xs={xs}
           ys={ys}
-          epochs={100}
-          history={40}
+          epochs={150}
+          history={50}
+          delay={0}
+          model={tf.sequential({
+            layers: [
+              tf.layers.dense({
+                units: 8,
+                inputShape: [1],
+                activation: "elu",
+              }),
+              tf.layers.dense({ units: 16, activation: "elu" }),
+              tf.layers.dense({ units: 1, activation: "linear" }),
+            ],
+          })}
         />
         <Card.Link href="#">Card Link</Card.Link>
       </Card.Body>
