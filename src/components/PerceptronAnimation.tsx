@@ -1,18 +1,12 @@
 // eslint-disable-next-line
-import React, {
-  useState,
-  useReducer,
-  useEffect,
-  useRef,
-  Fragment,
-} from "react";
+import React, { useState, useEffect, useRef, Fragment } from "react";
 import Button from "react-bootstrap/Button";
 import { FaPause, FaPlay, FaExpand, FaCompress } from "react-icons/fa";
 
 import * as d3 from "d3";
 import * as tf from "@tensorflow/tfjs";
+import { path } from "d3";
 //import * as tfvis from "@tensorflow/tfjs-vis";
-import { map, transition } from "d3";
 
 type Point = { x: number; y: number };
 type Path = { key: string; points: Point[] };
@@ -26,128 +20,133 @@ const PerceptronAnimation = (props: {
     bottom: number | 0;
     left: number | 0;
   };
-  label: string;
+  colors: {
+    background: string;
+    trainingData: string;
+    predictionHistory: string;
+    prediction: string;
+    mae: string;
+    text: string;
+  };
+  title: string;
+  description: string;
   xs: number[];
   ys: number[];
   model: tf.Sequential;
+  modelCompileArgs: tf.ModelCompileArgs;
   epochs: number;
+  batchSize: number | undefined;
+  yieldEvery: number;
   history: number;
-  delay?: number;
+  drawAxis?: boolean;
 }) => {
   const [state, setState] = useState(props);
   const {
     width,
     height,
     margin,
-    label,
+    colors,
+    title,
+    description,
     xs,
     ys,
     model,
+    modelCompileArgs,
     epochs,
+    batchSize,
+    yieldEvery,
     history,
-    delay,
+    drawAxis = false,
   } = state;
 
   const [epoch, setEpoch] = useState(0);
   const [batch, setBatch] = useState(0);
-  const [accuracy, setAccuracy] = useState(0);
-  const [mae, setMae] = useState(0);
-  const [mse, setMse] = useState(0);
+  const [mae, setMae] = useState<Path>({ key: "mae", points: [] });
   const [pathes, setPathes] = useState<Path[]>([]);
+  const [startTime, setStartTime] = useState(Date.now());
   const [stopTraining, setStopTraining] = useState(false);
 
   const timeoutTrain = () => setTimeout(trainModel, 15000);
 
-  const slower = () => {
-    setState({ ...state, delay: (delay || 0) + 100 });
+  const slower = (event: React.MouseEvent) => {
+    setState({ ...state, yieldEvery: yieldEvery - 10 });
   };
 
-  const faster = () => {
-    setState({ ...state, delay: (delay || 0) - 100 });
+  const faster = (event: React.MouseEvent) => {
+    setState({ ...state, yieldEvery: yieldEvery + 10 });
   };
 
-  const requestStopTraining = () => {
-    console.log("stopTraining requested");
+  const requestStopTraining = (event: React.MouseEvent) => {
+    event.preventDefault();
     setStopTraining(true);
     model.stopTraining = true;
   };
 
-  const compileModel = () => {
-    if (model) {
-      //const optimizer = new tf.SGDOptimizer(learingRate);
-      model.compile({
-        optimizer: "adam", // sgd, adam, adamax, adagrad, adadelta, rmsprop
-        loss: "meanAbsoluteError", // meanAbsoluteError, meanSquaredError, categoricalCrossentropy
-        metrics: ["mae", "mse", "acc"],
+  const compileModel = (event: React.MouseEvent) => {
+    event.preventDefault();
+    model.compile(modelCompileArgs);
+    console.log(model.summary());
+  };
+
+  const clearCraining = (event: React.MouseEvent) => {
+    event.preventDefault();
+    setPathes([]);
+    model.layers.forEach((layer) => {
+      let weights = layer.getWeights(true);
+      //weights = weights.map((w) => tf.randomGamma(w.shape, 0.4));
+      //weights = weights.map((w) => tf.randomUniform(w.shape));
+      weights = weights.map((w) => tf.randomNormal(w.shape));
+      layer.setWeights(weights);
+    });
+  };
+
+  const onYield = async (epoch: number, batch: number, logs: any) => {
+    if (stopTraining) model.stopTraining = true;
+
+    setBatch(batch);
+    setEpoch(epoch);
+
+    // Add new mean average error
+    mae.points.push({
+      x: epoch / epochs + (batch / epochs) * 0.01,
+      y: logs.mae,
+    });
+
+    tf.tidy(() => {
+      const xt: number[] = [];
+      for (let x = 0; x < 1.0025; x += 0.0025) {
+        xt.push(x);
+      }
+
+      let predictions = model.predict(tf.tensor(xt)) as tf.Tensor;
+      let path: Path = { key: `e${epoch}b${batch}`, points: [] };
+
+      predictions.data().then((array) => {
+        array.forEach((d: number, i: number) =>
+          path.points.push({ x: xt[i], y: d })
+        );
+        pathes.push(path);
+        setPathes(
+          pathes.filter((_, i) => i > pathes.length - history || i % 5 === 0)
+        );
+        predictions.dispose();
       });
-    }
+    });
   };
 
-  const resetWeights = () => {
-    console.log("weights", model.getWeights(), model.getWeights());
-  };
-
-  const sleep = (milliseconds: number) => {
-    const date = Date.now();
-    let currentDate = null;
-    do {
-      currentDate = Date.now();
-    } while (currentDate - date < milliseconds);
-  };
-
-  const trainModel = async () => {
-    const onBatchBegin = (batch: number, logs: any) => {
-      setBatch(batch);
-    };
-
-    const onBatchEnd = (batch: number, logs: any) => {
-      setMae(logs.mae);
-      setMse(logs.mse);
-      setAccuracy(logs.acc);
-    };
-
-    const onEpochBegin = (epoch: number, logs: any) => {
-      setEpoch(epoch);
-    };
-
-    const onEpochEnd = (epoch: number, logs: any) => {};
-
-    const onYield = (epoch: number, batch: number, logs: any) => {
-      if (delay && delay > 0) sleep(delay);
-
-      tf.tidy(() => {
-        const xt: number[] = [];
-        for (let x = 0; x < 1.005; x += 0.005) {
-          xt.push(x);
-        }
-
-        let predictions = model.predict(tf.tensor(xt)) as tf.Tensor;
-        predictions.array().then((array) => {
-          let path: Path = { key: `e${epoch}b${batch}`, points: [] };
-          (array as number[]).forEach((d, i) =>
-            path.points.push({ x: xt[i], y: d })
-          );
-          pathes.push(path);
-          setPathes(
-            pathes.filter((_, i) => i > pathes.length - history || i % 10 === 0)
-          );
-          predictions.dispose();
-        });
-      });
-    };
+  const trainModel = async (event: React.MouseEvent) => {
+    if (event) event.preventDefault();
+    setStopTraining(false);
+    setStartTime(Date.now());
 
     await model
       .fit(tf.tensor1d(xs), tf.tensor1d(ys), {
         epochs: epochs,
-        //batchSize: 40,
-        shuffle: true,
-        validationSplit: 0.2,
-        //yieldEvery: 200,
+        batchSize: batchSize,
+        shuffle: false,
+        validationSplit: 0.3,
+        yieldEvery: yieldEvery,
         callbacks: {
-          onBatchBegin,
-          onBatchEnd,
-          onEpochBegin,
-          onEpochEnd,
           onYield,
         },
       })
@@ -178,7 +177,7 @@ const PerceptronAnimation = (props: {
     if (trainData && svgRef.current) {
       const svg = d3.select(svgRef.current);
 
-      svg.style("background", "navy");
+      svg.style("background", colors.background);
 
       const main = svg
         .selectAll(".main")
@@ -189,14 +188,18 @@ const PerceptronAnimation = (props: {
         .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
       // Draw axis
-      // g.append("g")
-      //   .attr("class", "x-axis")
-      //   .attr("transform", `translate(0, ${h / 2})`)
-      //   .call(xAxis);
-      // g.append("g")
-      //   .attr("class", "y-axis")
-      //   .attr("transform", `translate(${w / 2}, 0)`)
-      //   .call(yAxis);
+      if (drawAxis) {
+        main
+          .append("g")
+          .attr("class", "x-axis")
+          .attr("transform", `translate(0, ${h / 2})`)
+          .call(xAxis);
+        main
+          .append("g")
+          .attr("class", "y-axis")
+          .attr("transform", `translate(${w / 2}, 0)`)
+          .call(yAxis);
+      }
 
       // Draw lines
       const line = d3
@@ -206,28 +209,52 @@ const PerceptronAnimation = (props: {
         })
         .y((d: Point) => yScale(d.y));
 
-      // Draw training data
-      main.append("g").attr("class", "train");
-      const trainUpdate = d3
-        .select(".train")
+      // Draw mae
+      main.append("g").attr("class", "mae");
+
+      const maeUpdate = d3
+        .selectAll(".mae")
         .selectAll<SVGSVGElement, Path>("path")
-        .data(trainData("train"), (d) => d.key);
+        .data([mae]);
+
+      maeUpdate.attr("d", (d) => line(d.points));
+
+      maeUpdate
+        .enter()
+        .append("path")
+        .attr("fill", "none")
+        .attr("stroke", colors.mae)
+        .attr("stroke-width", 0.25)
+        .attr("opacity", 0.6)
+        .attr("d", (d) => line(d.points));
+
+      maeUpdate.exit().remove();
+
+      // Draw training data
+      main.append("g").attr("class", "training-data");
+      const trainUpdate = d3
+        .select(".training-data")
+        .selectAll<SVGSVGElement, Path>("path")
+        .data(trainData("training-data"), (d) => d.key);
 
       trainUpdate
         .enter()
         .append("path")
         .attr("fill", "none")
-        .attr("stroke", "cyan")
-        .attr("stroke-width", 3)
+        .attr("stroke", colors.trainingData)
+        .attr("stroke-width", 12)
+        // .attr("stroke-dasharray", "0 25")
+        .attr("stroke-linecap", "round")
+        .attr("opacity", 0.5)
         .attr("d", (d) => line(d.points));
 
       trainUpdate.exit().remove();
 
-      // draw history
-      main.append("g").attr("class", "history");
+      // Draw history
+      main.append("g").attr("class", "prediction-history");
 
       const pathesUpdate = d3
-        .select(".history")
+        .select(".prediction-history")
         .selectAll<SVGSVGElement, Path>("path")
         .data(pathes, (d) => d.key);
 
@@ -235,59 +262,124 @@ const PerceptronAnimation = (props: {
         .enter()
         .append("path")
         .attr("fill", "none")
-        .attr("stroke", "yellow")
-        .attr("stroke-width", 1)
-        .attr("opacity", 0.6)
+        .attr("stroke", colors.predictionHistory)
+        .attr("stroke-width", 0.5)
+        .attr("opacity", 0.4)
         .attr("d", (d) => line(d.points));
 
       pathesUpdate.exit().remove();
 
       // Draw current
-      main.append("g").attr("class", "current");
+      main.append("g").attr("class", "prediction");
 
       const currentUpdate = d3
-        .selectAll(".current")
+        .selectAll(".prediction")
         .selectAll<SVGSVGElement, Path>("path")
         .data(pathes.slice(pathes.length - 1, pathes.length));
 
-      currentUpdate.attr("d", (d) => line(d.points));
+      currentUpdate.transition().attr("d", (d) => line(d.points));
 
       currentUpdate
         .enter()
         .append("path")
         .attr("fill", "none")
-        .attr("stroke", "magenta")
-        .attr("stroke-width", 8)
-        .attr("opacity", 0.9)
+        .attr("stroke", colors.prediction)
+        .attr("stroke-width", 10)
+        // .attr("stroke-dasharray", "0 25")
+        .attr("stroke-linecap", "round")
+        .attr("opacity", 0.8)
         .attr("d", (d) => line(d.points));
 
       currentUpdate.exit().remove();
 
+      // metrics
       svg
-        .selectAll(".label")
+        .selectAll(".metrics")
         .data([0])
         .enter()
         .append("text")
-        .attr("class", "label")
+        .attr("class", "metrics")
+        .attr("x", 20)
+        .attr("y", height - 10)
+        .attr("text-anchor", "start")
+        .style("font-family", "Roboto Mono")
+        .style("font-size", "8pt")
+        .style("opacity", 0.9);
+
+      svg
+        .selectAll(".metrics")
+        .style("fill", colors.text)
+        .text(
+          `Parameters: ${model.countParams()} \u2022 Epoch: ${(
+            "0000" + epoch
+          ).substr(-4)} \u2022 Batch: ${("000" + batch).substr(
+            -3
+          )} \u2022 Mean Absolute Error: ${(mae.points.length > 0
+            ? 100 * mae.points[mae.points.length - 1].y
+            : 100
+          ).toFixed(2)}%`
+        );
+      // .text(
+      //   `Layers: ${
+      //     model.layers.length
+      //   }  \u2022 Parameters: ${model.countParams()} \u2022 Epoch: ${(
+      //     "000" + epoch
+      //   ).substr(-3)} \u2022 Batch: ${("00" + batch).substr(
+      //     -2
+      //   )} \u2022 Mean Average Error: ${(mae.points.length > 0
+      //     ? 100 * mae.points[mae.points.length - 1].y
+      //     : 100
+      //   ).toFixed(2)}%`
+      // );
+
+      // label
+      svg
+        .selectAll(".title")
+        .data([0])
+        .enter()
+        .append("text")
+        .attr("class", "title")
         .attr("x", width - 20)
         .attr("y", height - 10)
         .attr("text-anchor", "end")
-        .style("font-family", "Work Sans")
-        .style("font-size", "6pt")
+        .style("font-family", "Roboto Mono")
+        .style("font-size", "8pt")
         .style("opacity", 0.9);
 
-      //const reducer = (accumulator, currentValue) => accumulator + currentValue;
-
-      var trainableWeights = 33; //model.trainableWeights.reduce((a, b) => { return a.shape[0] + b.shape[0]; });
-
-      svg.selectAll(".label").style("fill", "snow").text(
-        `Learning a Random Curve \u2022 ${
-          model.layers.length
-        } layers with ${trainableWeights}
-          trainable weights \u2022 ${new Date().toLocaleDateString()} \u2022 ${label}`
-      );
+      svg
+        .selectAll(".title")
+        .style("fill", colors.text)
+        .text(
+          `${title} \u2022 ${new Date().toLocaleDateString()} \u2022 deep@cyin.org`
+        );
     }
-  }, [state, pathes, svgRef, width, height, margin, trainData, label]);
+  }, [
+    state,
+    pathes,
+    svgRef,
+    width,
+    height,
+    margin,
+    colors,
+    yieldEvery,
+    trainData,
+    epoch,
+    batch,
+    mae,
+    title,
+    drawAxis,
+  ]);
+
+  /**
+   * Convert milliseconds to time string (hh:mm:ss:mss).
+   *
+   * @param Number ms
+   *
+   * @return String
+   */
+  const msToTime = (ms: number) => {
+    return new Date(ms).toISOString().slice(11, -1);
+  };
 
   return (
     <Fragment>
@@ -300,25 +392,28 @@ const PerceptronAnimation = (props: {
         ref={svgRef}
       />
       <p>
+        Time: {msToTime(Date.now() - startTime)}
+        <br />
         Epoch: {epoch}, Batch: {batch}
-        <br />
-        MAE: {mae}
-        <br />
-        MSE: {mse}
-        <br />
-        ACC: {accuracy}
         <br />
         EPOCHS: {epochs} - STOP: {stopTraining ? "true" : "false"}
         <br />
-        DELAY: {delay}
+        YIELD_EVERY: {yieldEvery}
       </p>
       <button onClick={compileModel}>Compile Model</button>
+
+      <Button variant="primary" className="mr-2" onClick={requestStopTraining}>
+        {!stopTraining ? <FaPause /> : <FaPlay />}
+      </Button>
+
       <button onClick={trainModel}>Train Model</button>
       <button onClick={timeoutTrain}>Timeout Train Model</button>
       <button onClick={slower}>Slower</button>
       <button onClick={faster}>Faster</button>
-      <button onClick={requestStopTraining}>Stop Training</button>
-      <button onClick={resetWeights}>Reset Weights</button>
+      <button onClick={requestStopTraining} disabled={stopTraining}>
+        Stop Training
+      </button>
+      <button onClick={clearCraining}>Clear Training</button>
     </Fragment>
   );
 };

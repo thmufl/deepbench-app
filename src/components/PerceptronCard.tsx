@@ -8,7 +8,7 @@ import * as tf from "@tensorflow/tfjs";
 
 import PerceptronAnimation from "./PerceptronAnimation";
 
-let DATA_POINTS = 800;
+let DATA_POINTS = 600;
 let data: any[] = [];
 
 const shuffle = (array: any[]) => {
@@ -37,51 +37,69 @@ const shuffle = (array: any[]) => {
 //   data.push({ x, y: m * x });
 // }
 
-// Sine;
-// for (let i = 0; i < DATA_POINTS; i++) {
-//   let angle = Math.random();
-//   data.push({ x: angle, y: Math.sin(angle * 2 * Math.PI) });
-// }
+//Sine;
+for (let i = 0; i < DATA_POINTS; i++) {
+  let angle = Math.random() * 7 * Math.PI;
+  data.push({ x: angle, y: Math.sin(angle) });
+}
 
-// Cubic
+// Quadratic
 // for (let i = 0; i < DATA_POINTS; i++) {
 //   let x = Math.random();
-//   data.push({ x, y: x * x * x });
+//   data.push({ x, y: x * x });
 // }
 
 // Random Path
 // data.push({ x: 0, y: Math.random() });
 // for (let i = 1; i < DATA_POINTS; i++) {
 //   let x = i / DATA_POINTS;
-//   let delta = Math.random() / (1000000 * DATA_POINTS);
+//   let delta = Math.random() / 100;
 //   let y = Math.random() > 0.5 ? data[i - 1].y + delta : data[i - 1].y - delta;
 //   data.push({ x, y });
 // }
 
-// Curve
-const a = Math.random() * 2 * Math.PI;
-const b = Math.random() * 2 * Math.PI;
-const c = Math.random() * 2 * Math.PI;
+// Trigonometric Waves
+// let a = Math.random();
+// let b = Math.random();
+// let c = Math.random();
 
-for (let i = 1; i < DATA_POINTS; i++) {
-  let x = i / DATA_POINTS;
-  data.push({
-    x,
-    y:
-      Math.sin(a * x * x) +
-      Math.cos(b * x * x * x) -
-      Math.cos(c * x * x * x * x),
-  });
-}
+// a = a * 22 * Math.PI;
+// b = b * 14 * Math.PI;
+// c = c * 6 * Math.PI;
 
-console.log(data);
+// const a = 0.46439311720573206 * 22 * Math.PI;
+// const b = 0.6115142870470018 * 14 * Math.PI;
+// const c = 0.5345657331481362 * 6 * Math.PI;
+
+// console.log("random vars", { a: a, b: b, c: c });
+
+// for (let i = 0; i < DATA_POINTS; i++) {
+//   let x = i / DATA_POINTS;
+//   data.push({
+//     x,
+//     y: Math.sin(a * x) * Math.cos(b * x * x) * Math.cos(c * x * x * x),
+//   });
+// }
+
+// sin(sin(x))
+// for (let i = 0; i < DATA_POINTS; i++) {
+//   let x = (i / DATA_POINTS + 1) * 18;
+//   data.push({
+//     x,
+//     y: Math.sin(2 * Math.sin(2 * Math.sin(2 * Math.sin(x)))),
+//   });
+// }
+
 data = shuffle(data);
 
 let xs = data.map((d) => d.x);
 let ys = data.map((d) => d.y);
 
-let scale: any = d3.scaleLinear().domain([d3.min(ys) || 0, d3.max(ys) || 1]);
-ys = ys.map((d) => scale(d));
+let xScale: any = d3.scaleLinear().domain([d3.min(xs) || 0, d3.max(xs) || 1]);
+xs = xs.map((d) => xScale(d));
+
+let yScale: any = d3.scaleLinear().domain([d3.min(ys) || -1, d3.max(ys) || 1]);
+ys = ys.map((d) => yScale(d));
 
 const PerceptronCard = () => {
   return (
@@ -94,31 +112,53 @@ const PerceptronCard = () => {
         </Card.Subtitle>
         <Card.Text>Lore ipsum</Card.Text>
         <PerceptronAnimation
-          width={1920 * 0.5} // window.innerWidth
-          height={1080 * 0.5}
+          width={1920 * 0.6} // window.innerWidth
+          height={1080 * 0.6}
           margin={{
-            top: 80,
+            top: 100,
             right: 0,
-            bottom: 80,
+            bottom: 100,
             left: 0,
           }}
-          label="deep@cyin.org"
+          colors={{
+            background: "DarkMagenta",
+            trainingData: "Snow",
+            predictionHistory: "LightCyan",
+            prediction: "Magenta",
+            mae: "Cyan",
+            text: "Snow",
+          }}
+          title="Learning Trigonometric Waves I"
+          description="Learning a random curve with a 2 layer network. Activation tanh, optimizer sgd."
           xs={xs}
           ys={ys}
-          epochs={150}
-          history={50}
-          delay={0}
+          epochs={20000}
+          batchSize={undefined}
+          yieldEvery={300}
+          history={100}
+          drawAxis={false}
           model={tf.sequential({
             layers: [
               tf.layers.dense({
-                units: 8,
                 inputShape: [1],
-                activation: "elu",
+                units: 100,
+                activation: "tanh",
               }),
-              tf.layers.dense({ units: 16, activation: "elu" }),
-              tf.layers.dense({ units: 1, activation: "linear" }),
+              // tf.layers.dropout({ rate: 0.05 }),
+              tf.layers.dense({ units: 100, activation: "tanh" }),
+              tf.layers.dense({ units: 100, activation: "tanh" }),
+              tf.layers.dense({ units: 100, activation: "tanh" }),
+              tf.layers.dense({ units: 100, activation: "tanh" }),
+              tf.layers.dense({ units: 1, activation: "tanh" }),
             ],
           })}
+          modelCompileArgs={{
+            //optimizer: "adam", // sgd, adam, adamax, adagrad, adadelta, rmsprop
+            //optimizer: tf.train.adam(0.002),
+            optimizer: "adam",
+            loss: "meanAbsoluteError", // meanAbsoluteError, meanSquaredError, categoricalCrossentropy
+            metrics: ["mae", "mse", "acc"],
+          }}
         />
         <Card.Link href="#">Card Link</Card.Link>
       </Card.Body>
