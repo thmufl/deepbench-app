@@ -5,7 +5,6 @@ import { FaPause, FaPlay, FaExpand, FaCompress } from "react-icons/fa";
 
 import * as d3 from "d3";
 import * as tf from "@tensorflow/tfjs";
-import { path } from "d3";
 //import * as tfvis from "@tensorflow/tfjs-vis";
 
 type Point = { x: number; y: number };
@@ -23,7 +22,7 @@ const PerceptronAnimation = (props: {
   colors: {
     background: string;
     trainingData: string;
-    predictionHistory: string;
+    predictionHistory: [string, string];
     prediction: string;
     mae: string;
     text: string;
@@ -68,18 +67,11 @@ const PerceptronAnimation = (props: {
 
   const timeoutTrain = () => setTimeout(trainModel, 15000);
 
-  const slower = (event: React.MouseEvent) => {
-    setState({ ...state, yieldEvery: yieldEvery - 10 });
-  };
-
-  const faster = (event: React.MouseEvent) => {
-    setState({ ...state, yieldEvery: yieldEvery + 10 });
-  };
-
-  const requestStopTraining = (event: React.MouseEvent) => {
+  const handleStopTraining = (event: React.MouseEvent) => {
     event.preventDefault();
     setStopTraining(true);
     model.stopTraining = true;
+    console.log(`Training stopped after ${epoch} epochs`);
   };
 
   const compileModel = (event: React.MouseEvent) => {
@@ -88,21 +80,58 @@ const PerceptronAnimation = (props: {
     console.log(model.summary());
   };
 
-  const clearCraining = (event: React.MouseEvent) => {
+  const saveModel = async (/*event: React.MouseEvent*/) => {
+    //if (event) event.preventDefault();
+    let result = await model.save("localstorage://sine-model");
+    console.log(`Model saved: ${JSON.stringify(result)}`);
+  };
+
+  const freezeLayers = async (event: React.MouseEvent) => {
+    event.preventDefault();
+
+    const layers = model.layers;
+    const n = 3;
+    for (let i = 0; i < layers.length - n; i++) {
+      layers[i].trainable = false;
+      console.log(`Freezing layer ${i}`);
+    }
+
+    // Set random values to the remaining layers
+    for (let i = layers.length - n; i < layers.length; i++) {
+      let weights = layers[i].getWeights();
+      let newWeigths = [];
+      for (let j = 0; j < weights.length; j++) {
+        //rand.push(tf.randomNormal(weights[j].shape));
+        //rand.push(tf.randomGamma(weights[j].shape, 1));
+        newWeigths.push(
+          tf.randomUniform(weights[j].shape, -0.5, 0.5, "float32", j)
+        );
+      }
+      layers[i].setWeights(newWeigths);
+      console.log(`Resetting layer ${i}`);
+    }
+  };
+
+  const loadModel = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    let m = (await tf.loadLayersModel(
+      "localstorage://sine-model"
+    )) as tf.Sequential;
+    setState({ ...state, model: m });
+    console.log("model loaded");
+  };
+
+  const clearTraining = (event: React.MouseEvent) => {
     event.preventDefault();
     setPathes([]);
     model.layers.forEach((layer) => {
       let weights = layer.getWeights(true);
-      //weights = weights.map((w) => tf.randomGamma(w.shape, 0.4));
-      //weights = weights.map((w) => tf.randomUniform(w.shape));
-      weights = weights.map((w) => tf.randomNormal(w.shape));
+      weights = weights.map((w) => tf.randomUniform(w.shape, -0.5, 0.5));
       layer.setWeights(weights);
     });
   };
 
   const onYield = async (epoch: number, batch: number, logs: any) => {
-    if (stopTraining) model.stopTraining = true;
-
     setBatch(batch);
     setEpoch(epoch);
 
@@ -127,7 +156,7 @@ const PerceptronAnimation = (props: {
         );
         pathes.push(path);
         setPathes(
-          pathes.filter((_, i) => i > pathes.length - history || i % 5 === 0)
+          pathes.filter((_, i) => i > pathes.length - history || i % 2 === 0)
         );
         predictions.dispose();
       });
@@ -151,15 +180,9 @@ const PerceptronAnimation = (props: {
         },
       })
       .then((info) => {
-        console.log("Final accuracy: " + info.history.acc.slice(-1)[0]);
+        //saveModel();
+        console.log("Final error: " + info.history.val_mae.slice(-1)[0]);
       });
-  };
-
-  const trainData = (key: string): Path[] => {
-    let points = xs.map((_, i) => {
-      return { x: xs[i], y: ys[i] };
-    });
-    return [{ key, points: points.sort((a, b) => a.x - b.x) }];
   };
 
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -167,6 +190,13 @@ const PerceptronAnimation = (props: {
   useEffect(() => {
     const w = width - margin.right - margin.left;
     const h = height - margin.top - margin.bottom;
+
+    const trainData = (key: string): Path[] => {
+      let points = xs.map((_, i) => {
+        return { x: xs[i], y: ys[i] };
+      });
+      return [{ key, points: points.sort((a, b) => a.x - b.x) }];
+    };
 
     const xScale: any = d3.scaleLinear().domain([0, 1]).range([0, w]);
     const yScale: any = d3.scaleLinear().domain([1, 0]).range([0, h]);
@@ -245,7 +275,7 @@ const PerceptronAnimation = (props: {
         .attr("stroke-width", 12)
         // .attr("stroke-dasharray", "0 25")
         .attr("stroke-linecap", "round")
-        .attr("opacity", 0.5)
+        .attr("opacity", 0.8)
         .attr("d", (d) => line(d.points));
 
       trainUpdate.exit().remove();
@@ -253,44 +283,57 @@ const PerceptronAnimation = (props: {
       // Draw history
       main.append("g").attr("class", "prediction-history");
 
-      const pathesUpdate = d3
+      const colorScale: any = d3.scaleLinear().domain([0, pathes.length]);
+      const color = (i: number) =>
+        d3.interpolateRgb.gamma(2.2)(
+          colors.predictionHistory[0],
+          colors.predictionHistory[1]
+        )(colorScale(i));
+
+      const historyUpdate = d3
         .select(".prediction-history")
         .selectAll<SVGSVGElement, Path>("path")
         .data(pathes, (d) => d.key);
 
-      pathesUpdate
+      historyUpdate
         .enter()
         .append("path")
         .attr("fill", "none")
-        .attr("stroke", colors.predictionHistory)
-        .attr("stroke-width", 0.5)
-        .attr("opacity", 0.4)
+        .attr("stroke", (_, i) => color(i))
+        .attr("stroke-width", 0.6)
+        .attr("opacity", 0.5)
         .attr("d", (d) => line(d.points));
 
-      pathesUpdate.exit().remove();
+      historyUpdate.attr("stroke", (_, i) => color(i));
 
-      // Draw current
+      historyUpdate.exit().remove();
+
+      // Draw prediction
       main.append("g").attr("class", "prediction");
 
-      const currentUpdate = d3
+      const predictionUpdate = d3
         .selectAll(".prediction")
         .selectAll<SVGSVGElement, Path>("path")
         .data(pathes.slice(pathes.length - 1, pathes.length));
 
-      currentUpdate.transition().attr("d", (d) => line(d.points));
+      predictionUpdate
+        .transition()
+        .duration(yieldEvery - 20)
+        .ease(d3.easeBounce)
+        .attr("d", (d) => line(d.points));
 
-      currentUpdate
+      predictionUpdate
         .enter()
         .append("path")
         .attr("fill", "none")
         .attr("stroke", colors.prediction)
-        .attr("stroke-width", 10)
+        .attr("stroke-width", 12)
         // .attr("stroke-dasharray", "0 25")
         .attr("stroke-linecap", "round")
         .attr("opacity", 0.8)
         .attr("d", (d) => line(d.points));
 
-      currentUpdate.exit().remove();
+      predictionUpdate.exit().remove();
 
       // metrics
       svg
@@ -310,27 +353,17 @@ const PerceptronAnimation = (props: {
         .selectAll(".metrics")
         .style("fill", colors.text)
         .text(
-          `Parameters: ${model.countParams()} \u2022 Epoch: ${(
+          `Layers: ${
+            model.layers.length
+          }  \u2022 Parameters: ${model.countParams()} \u2022 Epoch: ${(
             "0000" + epoch
           ).substr(-4)} \u2022 Batch: ${("000" + batch).substr(
             -3
-          )} \u2022 Mean Absolute Error: ${(mae.points.length > 0
+          )} \u2022 Error: ${(mae.points.length > 0
             ? 100 * mae.points[mae.points.length - 1].y
             : 100
           ).toFixed(2)}%`
         );
-      // .text(
-      //   `Layers: ${
-      //     model.layers.length
-      //   }  \u2022 Parameters: ${model.countParams()} \u2022 Epoch: ${(
-      //     "000" + epoch
-      //   ).substr(-3)} \u2022 Batch: ${("00" + batch).substr(
-      //     -2
-      //   )} \u2022 Mean Average Error: ${(mae.points.length > 0
-      //     ? 100 * mae.points[mae.points.length - 1].y
-      //     : 100
-      //   ).toFixed(2)}%`
-      // );
 
       // label
       svg
@@ -361,8 +394,10 @@ const PerceptronAnimation = (props: {
     height,
     margin,
     colors,
+    model,
+    xs,
+    ys,
     yieldEvery,
-    trainData,
     epoch,
     batch,
     mae,
@@ -396,24 +431,26 @@ const PerceptronAnimation = (props: {
         <br />
         Epoch: {epoch}, Batch: {batch}
         <br />
-        EPOCHS: {epochs} - STOP: {stopTraining ? "true" : "false"}
+        EPOCHS: {epochs} - STOPPED: {stopTraining ? "true" : "false"}
         <br />
         YIELD_EVERY: {yieldEvery}
       </p>
+      <button onClick={loadModel}>Load Model</button>
+      <button onClick={freezeLayers}>Freeze Layers</button>
+
       <button onClick={compileModel}>Compile Model</button>
 
-      <Button variant="primary" className="mr-2" onClick={requestStopTraining}>
+      <Button variant="primary" className="mr-2" onClick={handleStopTraining}>
         {!stopTraining ? <FaPause /> : <FaPlay />}
       </Button>
 
       <button onClick={trainModel}>Train Model</button>
       <button onClick={timeoutTrain}>Timeout Train Model</button>
-      <button onClick={slower}>Slower</button>
-      <button onClick={faster}>Faster</button>
-      <button onClick={requestStopTraining} disabled={stopTraining}>
+      <button onClick={handleStopTraining} disabled={stopTraining}>
         Stop Training
       </button>
-      <button onClick={clearCraining}>Clear Training</button>
+      <button onClick={saveModel}>Save Model</button>
+      <button onClick={clearTraining}>Clear Training</button>
     </Fragment>
   );
 };

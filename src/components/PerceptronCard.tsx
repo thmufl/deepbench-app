@@ -38,10 +38,10 @@ const shuffle = (array: any[]) => {
 // }
 
 //Sine;
-for (let i = 0; i < DATA_POINTS; i++) {
-  let angle = Math.random() * 7 * Math.PI;
-  data.push({ x: angle, y: Math.sin(angle) });
-}
+// for (let i = 0; i < DATA_POINTS; i++) {
+//   let angle = Math.random() * 5 * Math.PI;
+//   data.push({ x: angle, y: Math.sin(angle) });
+// }
 
 // Quadratic
 // for (let i = 0; i < DATA_POINTS; i++) {
@@ -67,19 +67,29 @@ for (let i = 0; i < DATA_POINTS; i++) {
 // b = b * 14 * Math.PI;
 // c = c * 6 * Math.PI;
 
-// const a = 0.46439311720573206 * 22 * Math.PI;
-// const b = 0.6115142870470018 * 14 * Math.PI;
-// const c = 0.5345657331481362 * 6 * Math.PI;
+// Reference
+// const a = 0.36439311720573206 * 22 * Math.PI;
+// const b = 0.2115142870470018 * 14 * Math.PI;
+// const c = 0.6345657331481362 * 6 * Math.PI;
 
-// console.log("random vars", { a: a, b: b, c: c });
+const a = Math.random() * 10 * Math.PI;
+const b = Math.random() * 10 * Math.PI;
+const c = Math.random() * 10 * Math.PI;
+const d = Math.random() * 10 * Math.PI;
 
-// for (let i = 0; i < DATA_POINTS; i++) {
-//   let x = i / DATA_POINTS;
-//   data.push({
-//     x,
-//     y: Math.sin(a * x) * Math.cos(b * x * x) * Math.cos(c * x * x * x),
-//   });
-// }
+console.log("random vars", { a: a, b: b, c: c });
+
+for (let i = 0; i < DATA_POINTS; i++) {
+  let x = i / DATA_POINTS;
+  data.push({
+    x,
+    y:
+      Math.sin(a * x) *
+      Math.cos(b * x * x) *
+      Math.sin(c * x * x * x) *
+      Math.cos(d * x * x * x * x),
+  });
+}
 
 // sin(sin(x))
 // for (let i = 0; i < DATA_POINTS; i++) {
@@ -121,21 +131,21 @@ const PerceptronCard = () => {
             left: 0,
           }}
           colors={{
-            background: "DarkMagenta",
-            trainingData: "Snow",
-            predictionHistory: "LightCyan",
-            prediction: "Magenta",
+            background: "DarkSlateBlue",
+            trainingData: "LightGrey",
+            predictionHistory: ["Yellow", "Red"],
+            prediction: "OrangeRed",
             mae: "Cyan",
             text: "Snow",
           }}
-          title="Learning Trigonometric Waves I"
+          title="Learning Trigonometric Waves II"
           description="Learning a random curve with a 2 layer network. Activation tanh, optimizer sgd."
           xs={xs}
           ys={ys}
-          epochs={20000}
+          epochs={1000}
           batchSize={undefined}
           yieldEvery={300}
-          history={100}
+          history={50}
           drawAxis={false}
           model={tf.sequential({
             layers: [
@@ -148,14 +158,13 @@ const PerceptronCard = () => {
               tf.layers.dense({ units: 100, activation: "tanh" }),
               tf.layers.dense({ units: 100, activation: "tanh" }),
               tf.layers.dense({ units: 100, activation: "tanh" }),
-              tf.layers.dense({ units: 100, activation: "tanh" }),
               tf.layers.dense({ units: 1, activation: "tanh" }),
             ],
           })}
           modelCompileArgs={{
             //optimizer: "adam", // sgd, adam, adamax, adagrad, adadelta, rmsprop
-            //optimizer: tf.train.adam(0.002),
-            optimizer: "adam",
+            optimizer: tf.train.adam(0.001),
+            //optimizer: "adam",
             loss: "meanAbsoluteError", // meanAbsoluteError, meanSquaredError, categoricalCrossentropy
             metrics: ["mae", "mse", "acc"],
           }}
