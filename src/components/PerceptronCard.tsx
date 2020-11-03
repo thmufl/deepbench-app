@@ -39,7 +39,7 @@ const shuffle = (array: any[]) => {
 
 //Sine;
 // for (let i = 0; i < DATA_POINTS; i++) {
-//   let angle = Math.random() * 5 * Math.PI;
+//   let angle = Math.random() * 12 * Math.PI;
 //   data.push({ x: angle, y: Math.sin(angle) });
 // }
 
@@ -133,16 +133,16 @@ const PerceptronCard = () => {
           colors={{
             background: "DarkSlateBlue",
             trainingData: "LightGrey",
-            predictionHistory: ["Yellow", "Red"],
+            predictionHistory: ["Cyan", "Yellow"],
             prediction: "OrangeRed",
             mae: "Cyan",
             text: "Snow",
           }}
-          title="Learning Trigonometric Waves II"
+          title="Learning Trigonometric Waves III"
           description="Learning a random curve with a 2 layer network. Activation tanh, optimizer sgd."
           xs={xs}
           ys={ys}
-          epochs={1000}
+          epochs={5000}
           batchSize={undefined}
           yieldEvery={300}
           history={50}
