@@ -28,16 +28,17 @@ const LineChartControl = (props: {
   epoch: number;
   batch: number;
   yieldEvery: number;
-  pathes: Path[];
+  predictions: Path[];
   mae: Path;
   drawAxis?: boolean;
+  zoom: boolean;
 }) => {
-  const { width, height } = props;
+  const { width, height, zoom } = props;
   const svgRef = useRef<SVGSVGElement | null>(null);
 
   useEffect(() => {
     const {
-      pathes,
+      predictions,
       width,
       height,
       margin,
@@ -52,6 +53,7 @@ const LineChartControl = (props: {
       drawAxis,
     } = props;
 
+    console.log("useEffect", Date.now());
     const w = width - margin.right - margin.left;
     const h = height - margin.top - margin.bottom;
 
@@ -148,7 +150,7 @@ const LineChartControl = (props: {
       // Draw history
       main.append("g").attr("class", "prediction-history");
 
-      const colorScale: any = d3.scaleLinear().domain([0, pathes.length]);
+      const colorScale: any = d3.scaleLinear().domain([0, predictions.length]);
       const color = (i: number) =>
         d3.interpolateRgb.gamma(2.2)(
           colors.predictionHistory[0],
@@ -158,7 +160,7 @@ const LineChartControl = (props: {
       const historyUpdate = d3
         .select(".prediction-history")
         .selectAll<SVGSVGElement, Path>("path")
-        .data(pathes, (d) => d.key);
+        .data(predictions, (d) => d.key);
 
       historyUpdate
         .enter()
@@ -176,7 +178,10 @@ const LineChartControl = (props: {
       // Draw prediction
       main.append("g").attr("class", "prediction");
 
-      const prediction = pathes.slice(pathes.length - 1, pathes.length);
+      const prediction = predictions.slice(
+        predictions.length - 1,
+        predictions.length
+      );
       if (prediction.length > 0) prediction[0].key = "prediction";
 
       const predictionUpdate = d3
@@ -186,8 +191,8 @@ const LineChartControl = (props: {
 
       predictionUpdate
         .transition()
-        .duration(yieldEvery * 0.25) // yield is approximate
-        .ease(d3.easeQuadOut)
+        .duration(yieldEvery / 3) // yield is approximate
+        .ease(d3.easeSin)
         .attr("d", (d) => line(d.points));
 
       predictionUpdate
@@ -256,8 +261,8 @@ const LineChartControl = (props: {
     <Fragment>
       <svg
         className="d3-component"
-        width={width}
-        height={height}
+        width={zoom ? (1920 / 3) * 2 : undefined}
+        height={zoom ? (1080 / 3) * 2 : undefined}
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="xMinYMin meet"
         ref={svgRef}

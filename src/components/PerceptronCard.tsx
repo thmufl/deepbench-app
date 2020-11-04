@@ -72,33 +72,33 @@ const shuffle = (array: any[]) => {
 // const b = 0.2115142870470018 * 14 * Math.PI;
 // const c = 0.6345657331481362 * 6 * Math.PI;
 
-const a = Math.random() * 10 * Math.PI;
-const b = Math.random() * 10 * Math.PI;
-const c = Math.random() * 10 * Math.PI;
-const d = Math.random() * 10 * Math.PI;
+// const a = Math.random() * 10 * Math.PI;
+// const b = Math.random() * 10 * Math.PI;
+// const c = Math.random() * 10 * Math.PI;
+// const d = Math.random() * 10 * Math.PI;
 
-console.log("random vars", { a: a, b: b, c: c });
+// console.log("random vars", { a: a, b: b, c: c });
 
-for (let i = 0; i < DATA_POINTS; i++) {
-  let x = i / DATA_POINTS;
-  data.push({
-    x,
-    y:
-      Math.sin(a * x) *
-      Math.cos(b * x * x) *
-      Math.sin(c * x * x * x) *
-      Math.cos(d * x * x * x * x),
-  });
-}
-
-// sin(sin(x))
 // for (let i = 0; i < DATA_POINTS; i++) {
-//   let x = (i / DATA_POINTS + 1) * 18;
+//   let x = i / DATA_POINTS;
 //   data.push({
 //     x,
-//     y: Math.sin(2 * Math.sin(2 * Math.sin(2 * Math.sin(x)))),
+//     y:
+//       Math.sin(a * x) *
+//       Math.cos(b * x * x) *
+//       Math.sin(c * x * x * x) *
+//       Math.cos(d * x * x * x * x),
 //   });
 // }
+
+//sin(sin(x));
+for (let i = 0; i < DATA_POINTS; i++) {
+  let x = (i / DATA_POINTS + 1) * 18;
+  data.push({
+    x,
+    y: Math.sin(2 * Math.sin(2 * Math.sin(2 * Math.sin(x)))),
+  });
+}
 
 data = shuffle(data);
 
@@ -142,9 +142,9 @@ const PerceptronCard = () => {
           description="Learning a random curve with a 2 layer network. Activation tanh, optimizer sgd."
           xs={xs}
           ys={ys}
-          epochs={5000}
+          epochs={500}
           batchSize={undefined}
-          yieldEvery={300}
+          yieldEvery={1000}
           history={50}
           drawAxis={false}
           model={tf.sequential({
