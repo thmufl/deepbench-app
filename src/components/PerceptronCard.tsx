@@ -122,8 +122,8 @@ const PerceptronCard = () => {
         </Card.Subtitle>
         <Card.Text>Lore ipsum</Card.Text>
         <PerceptronAnimation
-          width={1920 * 0.6} // window.innerWidth
-          height={1080 * 0.6}
+          width={1920 * 0.7}
+          height={1080 * 0.7}
           margin={{
             top: 100,
             right: 0,
@@ -142,7 +142,7 @@ const PerceptronCard = () => {
           description="Learning a random curve with a 2 layer network. Activation tanh, optimizer sgd."
           xs={xs}
           ys={ys}
-          epochs={500}
+          epochs={1000}
           batchSize={undefined}
           yieldEvery={1000}
           history={50}

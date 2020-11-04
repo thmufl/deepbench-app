@@ -1,6 +1,9 @@
 // eslint-disable-next-line
 import React, { useState, useEffect, useRef, Fragment } from "react";
+import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
+import Row from "react-bootstrap/Row";
+import Col from "react-bootstrap/Col";
 import {
   FaPlusSquare,
   FaMinusSquare,
@@ -17,7 +20,6 @@ import * as tf from "@tensorflow/tfjs";
 import { Point, Path } from "./commons/Types";
 import LineChartControl from "./commons/LineChartControl";
 import { setTimeout } from "timers";
-import { parentPort } from "worker_threads";
 
 const PerceptronAnimation = (props: {
   width: number;
@@ -72,9 +74,16 @@ const PerceptronAnimation = (props: {
   const [trainingData, setTrainingData] = useState<{
     epoch: number;
     batch: number;
+    meanAbsoluteError: number;
     predictions: Path[];
     mae: Path;
-  }>({ epoch: 0, batch: 0, predictions: [], mae: { key: "mae", points: [] } });
+  }>({
+    epoch: 0,
+    batch: 0,
+    meanAbsoluteError: 0,
+    predictions: [],
+    mae: { key: "mae", points: [] },
+  });
 
   const [modelCompiled, setModelCompiled] = useState(false);
   const [modelTraining, setModelTraining] = useState(false);
@@ -147,6 +156,7 @@ const PerceptronAnimation = (props: {
     setTrainingData({
       epoch: 0,
       batch: 0,
+      meanAbsoluteError: 0,
       predictions: [],
       mae: { key: "mae", points: [] },
     });
@@ -157,45 +167,50 @@ const PerceptronAnimation = (props: {
     });
   };
 
-  const updateTrainingData = (epoch: number, batch: number, logs: any) => {
+  const updateTrainingData = (
+    epoch: number,
+    batch: number,
+    meanAbsoluteError: number
+  ) => {
     // Add new mean absolute error
     trainingData.mae.points.push({
       x: epoch / epochs + (batch / epochs) * 0.01,
-      y: logs.mae,
+      y: meanAbsoluteError,
     });
 
     tf.tidy(() => {
       const xt: number[] = [];
-      for (let x = 0; x < 1.0025; x += 0.0025) {
+      for (let x = 0; x < 1.002; x += 0.002) {
         xt.push(x);
       }
 
-      let pred = model.predict(tf.tensor(xt)) as tf.Tensor;
+      let prediction = model.predict(tf.tensor(xt)) as tf.Tensor;
       let path: Path = { key: `e${epoch}b${batch}`, points: [] };
 
-      pred.data().then((array) => {
+      prediction.data().then((array) => {
         array.forEach((d: number, i: number) =>
           path.points.push({ x: xt[i], y: d })
         );
-        pred.dispose();
+        prediction.dispose();
 
-        trainingData.epoch = epoch;
-        trainingData.batch = batch;
         trainingData.predictions.push(path);
-        trainingData.predictions = trainingData.predictions.filter(
-          (_, i) => i > trainingData.predictions.length - history || i % 2 === 0
-        );
-        setTrainingData({ ...trainingData });
+
+        setTrainingData({
+          ...trainingData,
+          epoch,
+          batch,
+          meanAbsoluteError,
+          predictions: trainingData.predictions.filter(
+            (_, i) =>
+              i > trainingData.predictions.length - history || i % 2 === 0
+          ),
+        });
       });
     });
   };
 
-  const onEpochEnd = async (epoch: number, logs: any) => {
-    updateTrainingData(epoch, -1, logs);
-  };
-
-  const onYield = async (epoch: number, batch: number, logs: any) => {
-    updateTrainingData(epoch, batch | 0, logs);
+  const onYield = (epoch: number, batch: number, logs: tf.Logs) => {
+    updateTrainingData(epoch, batch | 0, logs.mae);
   };
 
   const trainModel = async (event: React.MouseEvent) => {
@@ -206,18 +221,23 @@ const PerceptronAnimation = (props: {
       setStartTime(Date.now());
       await model
         .fit(tf.tensor1d(xs), tf.tensor1d(ys), {
-          epochs: epochs,
+          epochs: +epochs,
           batchSize: batchSize,
           shuffle: false,
           validationSplit: 0.3,
-          yieldEvery: yieldEvery,
+          yieldEvery: +yieldEvery,
           callbacks: {
-            //onEpochEnd,
             onYield,
           },
         })
         .then((info) => {
+          updateTrainingData(
+            epochs,
+            0,
+            info.history.val_mae.slice(-1)[0] as number
+          );
           console.log("Final error: " + info.history.val_mae.slice(-1)[0]);
+          setModelTraining(false);
         });
     };
 
@@ -226,6 +246,11 @@ const PerceptronAnimation = (props: {
     } else {
       setTimeout(train, 15000);
     }
+  };
+
+  const handleOnChange = (event: any) => {
+    const { name, value } = event.currentTarget;
+    setState({ ...state, [name]: value });
   };
 
   /**
@@ -242,8 +267,8 @@ const PerceptronAnimation = (props: {
   return (
     <Fragment>
       <LineChartControl
-        width={zoom ? window.innerWidth : undefined}
-        height={zoom ? (window.innerWidth * height) / width : undefined}
+        width={width}
+        height={height}
         margin={margin}
         colors={colors}
         title={title}
@@ -252,6 +277,7 @@ const PerceptronAnimation = (props: {
         ys={ys}
         epoch={trainingData.epoch}
         batch={trainingData.batch}
+        meanAbsoluteError={trainingData.meanAbsoluteError}
         yieldEvery={yieldEvery}
         predictions={trainingData.predictions}
         mae={trainingData.mae}
@@ -266,65 +292,110 @@ const PerceptronAnimation = (props: {
         {zoom ? <FaCompress /> : <FaExpand />}
       </Button>
 
-      <p>
-        Time: {msToTime(Date.now() - startTime)}
-        <br />
-        EPOCHS: {epochs}
-      </p>
-      <p></p>
-      <Button variant="secondary" onClick={loadModel} disabled={modelTraining}>
-        Load Model
-      </Button>
-      <Button
-        variant="secondary"
-        className="ml-2"
-        onClick={freezeLayers}
-        disabled={modelTraining}
-      >
-        Freeze Layers
-      </Button>
-      <Button
-        variant="secondary"
-        className="ml-2"
-        onClick={compileModel}
-        disabled={modelTraining}
-      >
-        Compile Model
-      </Button>
-      <Button
-        variant="secondary"
-        className="ml-1"
-        onClick={modelTraining ? stopTraining : trainModel}
-        disabled={!modelCompiled}
-      >
-        {modelTraining ? "Stop Training" : "Train Model"}
-      </Button>
-      <Button
-        variant="secondary"
-        className="ml-2"
-        onClick={saveModel}
-        disabled={modelTraining}
-      >
-        Save Model
-      </Button>
-      <Button
-        variant="secondary"
-        className="ml-2"
-        onClick={clearTraining}
-        disabled={modelTraining}
-      >
-        Clear Training
-      </Button>
-      <p>
+      <p>Time: {msToTime(Date.now() - startTime)}</p>
+
+      <Form className="mt-3">
+        <Row>
+          <Col className="col-2">
+            <Form.Group>
+              <Form.Label>Epochs</Form.Label>
+              <Form.Control
+                type="number"
+                name="epochs"
+                value={epochs}
+                disabled={modelTraining}
+                onChange={handleOnChange}
+              ></Form.Control>
+              <Form.Text>Epochs to train</Form.Text>
+            </Form.Group>
+          </Col>
+          <Col className="col-2">
+            <Form.Group>
+              <Form.Label>Yield every</Form.Label>
+              <Form.Control
+                type="number"
+                name="yieldEvery"
+                value={yieldEvery}
+                disabled={modelTraining}
+                onChange={handleOnChange}
+              ></Form.Control>
+              <Form.Text>Epochs to train</Form.Text>
+            </Form.Group>
+          </Col>
+          <Col className="col-5">
+            <Form.Group>
+              <Form.Label>Title</Form.Label>
+              <Form.Control
+                type="text"
+                name="title"
+                value={title}
+                onChange={handleOnChange}
+              ></Form.Control>
+              <Form.Text>Title of the training</Form.Text>
+            </Form.Group>
+          </Col>
+        </Row>
+      </Form>
+      <div className="d-flex justify-content-start">
+        <Button
+          variant="secondary"
+          onClick={loadModel}
+          disabled={modelTraining}
+        >
+          Load Model
+        </Button>
+        <Button
+          variant="secondary"
+          className="ml-2"
+          onClick={freezeLayers}
+          disabled={modelTraining}
+        >
+          Freeze Layers
+        </Button>
+        <Button
+          variant="secondary"
+          className="ml-2"
+          onClick={compileModel}
+          disabled={modelTraining}
+        >
+          Compile Model
+        </Button>
+        <Button
+          variant="secondary"
+          className="ml-1"
+          onClick={modelTraining ? stopTraining : trainModel}
+          disabled={!modelCompiled}
+        >
+          {modelTraining ? "Stop Training" : "Train Model"}
+        </Button>
+        <Button
+          variant="secondary"
+          className="ml-2"
+          onClick={saveModel}
+          disabled={modelTraining}
+        >
+          Save Model
+        </Button>
+        <Button
+          variant="secondary"
+          className="ml-2"
+          onClick={clearTraining}
+          disabled={modelTraining}
+        >
+          Clear Training
+        </Button>
+      </div>
+      <div className="mt-2">
         <label>
           <input
             type="checkbox"
+            className="mr-1"
             checked={timeoutBeforeTrain}
             onChange={toggleTimeoutBeforeTrain}
           />
           Timeout before Train
         </label>
-      </p>
+      </div>
     </Fragment>
   );
 };

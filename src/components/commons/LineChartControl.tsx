@@ -27,6 +27,7 @@ const LineChartControl = (props: {
   ys: number[];
   epoch: number;
   batch: number;
+  meanAbsoluteError: number;
   yieldEvery: number;
   predictions: Path[];
   mae: Path;
@@ -47,13 +48,13 @@ const LineChartControl = (props: {
       ys,
       epoch,
       batch,
+      meanAbsoluteError,
       yieldEvery,
       mae,
       title,
       drawAxis,
     } = props;
 
-    console.log("useEffect", Date.now());
     const w = width - margin.right - margin.left;
     const h = height - margin.top - margin.bottom;
 
@@ -228,10 +229,7 @@ const LineChartControl = (props: {
         .text(
           `Epoch: ${("0000" + epoch).substr(-4)} \u2022 Batch: ${(
             "000" + batch
-          ).substr(-3)} \u2022 Error: ${(mae.points.length > 0
-            ? 100 * mae.points[mae.points.length - 1].y
-            : 100
-          ).toFixed(2)}%`
+          ).substr(-3)} \u2022 Error: ${(meanAbsoluteError * 100).toFixed(2)}%`
         );
 
       // label
@@ -261,8 +259,8 @@ const LineChartControl = (props: {
     <Fragment>
       <svg
         className="d3-component"
-        width={zoom ? (1920 / 3) * 2 : undefined}
-        height={zoom ? (1080 / 3) * 2 : undefined}
+        width={zoom ? width : undefined}
+        height={zoom ? height : undefined}
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="xMinYMin meet"
         ref={svgRef}
