@@ -20,6 +20,8 @@ import * as tf from "@tensorflow/tfjs";
 import { Point, Path } from "./commons/Types";
 import LineChartControl from "./commons/LineChartControl";
 import { setTimeout } from "timers";
+import Accordion from "react-bootstrap/esm/Accordion";
+import { Card } from "react-bootstrap";
 
 const PerceptronAnimation = (props: {
   width: number;
@@ -98,7 +100,7 @@ const PerceptronAnimation = (props: {
     setState({ ...state, zoom: !zoom });
   };
 
-  const stopTraining = (event: React.MouseEvent) => {
+  const stopTraining = async (event: React.MouseEvent) => {
     event.preventDefault();
     model.stopTraining = true;
     setModelTraining(false);
@@ -151,7 +153,7 @@ const PerceptronAnimation = (props: {
     console.log("model loaded");
   };
 
-  const clearTraining = (event: React.MouseEvent) => {
+  const clearTraining = async (event: React.MouseEvent) => {
     event.preventDefault();
     setTrainingData({
       epoch: 0,
@@ -161,7 +163,7 @@ const PerceptronAnimation = (props: {
       mae: { key: "mae", points: [] },
     });
     model.layers.forEach((layer) => {
-      let weights = layer.getWeights(true);
+      let weights = layer.getWeights();
       weights = weights.map((w) => tf.randomUniform(w.shape, -0.5, 0.5));
       layer.setWeights(weights);
     });
@@ -180,7 +182,7 @@ const PerceptronAnimation = (props: {
 
     tf.tidy(() => {
       const xt: number[] = [];
-      for (let x = 0; x < 1.002; x += 0.002) {
+      for (let x = 0; x < 1.005; x += 0.005) {
         xt.push(x);
       }
 
@@ -195,15 +197,20 @@ const PerceptronAnimation = (props: {
 
         trainingData.predictions.push(path);
 
+        if (trainingData.predictions.length > history) {
+          const toDelete = Math.round(
+            Math.random() * trainingData.predictions.length - 1
+          );
+          trainingData.predictions = trainingData.predictions.filter(
+            (_, i) => i !== toDelete
+          );
+        }
+
         setTrainingData({
           ...trainingData,
           epoch,
           batch,
           meanAbsoluteError,
-          predictions: trainingData.predictions.filter(
-            (_, i) =>
-              i > trainingData.predictions.length - history || i % 2 === 0
-          ),
         });
       });
     });
@@ -225,7 +232,7 @@ const PerceptronAnimation = (props: {
           batchSize: batchSize,
           shuffle: false,
           validationSplit: 0.3,
-          yieldEvery: +yieldEvery,
+          yieldEvery: yieldEvery ? +yieldEvery : undefined,
           callbacks: {
             onYield,
           },
@@ -278,65 +285,13 @@ const PerceptronAnimation = (props: {
         epoch={trainingData.epoch}
         batch={trainingData.batch}
         meanAbsoluteError={trainingData.meanAbsoluteError}
-        yieldEvery={yieldEvery}
         predictions={trainingData.predictions}
         mae={trainingData.mae}
         drawAxis={drawAxis}
         zoom={zoom}
       />
-      <Button
-        variant="secondary"
-        className="mt-1 float-right"
-        onClick={toggleZoom}
-      >
-        {zoom ? <FaCompress /> : <FaExpand />}
-      </Button>
 
-      <p>Time: {msToTime(Date.now() - startTime)}</p>
-
-      <Form className="mt-3">
-        <Row>
-          <Col className="col-2">
-            <Form.Group>
-              <Form.Label>Epochs</Form.Label>
-              <Form.Control
-                type="number"
-                name="epochs"
-                value={epochs}
-                disabled={modelTraining}
-                onChange={handleOnChange}
-              ></Form.Control>
-              <Form.Text>Epochs to train</Form.Text>
-            </Form.Group>
-          </Col>
-          <Col className="col-2">
-            <Form.Group>
-              <Form.Label>Yield every</Form.Label>
-              <Form.Control
-                type="number"
-                name="yieldEvery"
-                value={yieldEvery}
-                disabled={modelTraining}
-                onChange={handleOnChange}
-              ></Form.Control>
-              <Form.Text>Epochs to train</Form.Text>
-            </Form.Group>
-          </Col>
-          <Col className="col-5">
-            <Form.Group>
-              <Form.Label>Title</Form.Label>
-              <Form.Control
-                type="text"
-                name="title"
-                value={title}
-                onChange={handleOnChange}
-              ></Form.Control>
-              <Form.Text>Title of the training</Form.Text>
-            </Form.Group>
-          </Col>
-        </Row>
-      </Form>
-      <div className="d-flex justify-content-start">
+      <div className="d-flex justify-content-start mt-2">
         <Button
           variant="secondary"
           onClick={loadModel}
@@ -384,18 +339,143 @@ const PerceptronAnimation = (props: {
         >
           Clear Training
         </Button>
+        <Button variant="secondary" className="ml-2" onClick={toggleZoom}>
+          {zoom ? <FaCompress /> : <FaExpand />}
+        </Button>
       </div>
-      <div className="mt-2">
-        <label>
-          <input
-            type="checkbox"
-            className="mr-1"
-            checked={timeoutBeforeTrain}
-            onChange={toggleTimeoutBeforeTrain}
-          />
-          Timeout before Train
-        </label>
-      </div>
+
+      <Accordion className="mt-4">
+        <Card>
+          <Card.Header>
+            <Accordion.Toggle as={Button} variant="link" eventKey="0">
+              Info
+            </Accordion.Toggle>
+          </Card.Header>
+          <Accordion.Collapse eventKey="0">
+            <Card.Body>
+              {" "}
+              <Form className="mt-2">
+                <Row>
+                  <Col className="col-3">
+                    Epoch: {trainingData.epoch} of {epochs}
+                  </Col>
+                  <Col className="col-3">Batch: {trainingData.batch}</Col>
+                  <Col className="col-4">
+                    Mean Absolute Error:{" "}
+                    {(trainingData.meanAbsoluteError * 100).toFixed(2)}%
+                  </Col>
+                </Row>
+                <Row>
+                  <Col className="col-3">
+                    Time: {msToTime(Date.now() - startTime)}
+                  </Col>
+                  <Col className="col-3">
+                    Remaining:{" "}
+                    {trainingData.epoch > 0
+                      ? msToTime(
+                          ((epochs - trainingData.epoch) *
+                            (Date.now() - startTime)) /
+                            trainingData.epoch
+                        )
+                      : 0}
+                  </Col>
+                  <Col className="col-2">
+                    History: {trainingData.predictions.length}
+                  </Col>
+                </Row>
+                <Row>
+                  <Col className="col-3">Layers: {model.layers.length}</Col>
+                  <Col className="col-3">Parameters: {model.countParams()}</Col>
+                </Row>
+              </Form>
+            </Card.Body>
+          </Accordion.Collapse>
+        </Card>
+      </Accordion>
+
+      <Accordion className="mt-4">
+        <Card>
+          <Card.Header>
+            <Accordion.Toggle as={Button} variant="link" eventKey="0">
+              Data
+            </Accordion.Toggle>
+          </Card.Header>
+          <Accordion.Collapse eventKey="0">
+            <Card.Body></Card.Body>
+          </Accordion.Collapse>
+        </Card>
+      </Accordion>
+
+      <Accordion className="mt-4">
+        <Card>
+          <Card.Header>
+            <Accordion.Toggle as={Button} variant="link" eventKey="0">
+              Training
+            </Accordion.Toggle>
+          </Card.Header>
+          <Accordion.Collapse eventKey="0">
+            <Card.Body>
+              {" "}
+              <Form className="mt-2">
+                <Row>
+                  <Col className="col-2">
+                    <Form.Group>
+                      <Form.Label>Epochs</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="epochs"
+                        value={epochs}
+                        disabled={modelTraining}
+                        onChange={handleOnChange}
+                      ></Form.Control>
+                      <Form.Text>Epochs to train</Form.Text>
+                    </Form.Group>
+                  </Col>
+                  <Col className="col-2">
+                    <Form.Group>
+                      <Form.Label>Yield every</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="yieldEvery"
+                        value={yieldEvery}
+                        disabled={modelTraining}
+                        onChange={handleOnChange}
+                      ></Form.Control>
+                      <Form.Text>Yield every n millis</Form.Text>
+                    </Form.Group>
+                  </Col>
+                  <Col className="col-4">
+                    <Form.Group>
+                      <Form.Label>Timeout</Form.Label>
+                      <Form.Check
+                        type="checkbox"
+                        name="timeoutBeforeTrain"
+                        label="Timeout before training in millis"
+                        checked={timeoutBeforeTrain}
+                        onChange={toggleTimeoutBeforeTrain}
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Row>
+                  <Col className="col-8">
+                    <Form.Group>
+                      <Form.Label>Title</Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="title"
+                        value={title}
+                        onChange={handleOnChange}
+                      ></Form.Control>
+                      <Form.Text>Title of the training</Form.Text>
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Form>
+            </Card.Body>
+          </Accordion.Collapse>
+        </Card>
+      </Accordion>
     </Fragment>
   );
 };

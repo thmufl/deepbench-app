@@ -92,11 +92,20 @@ const shuffle = (array: any[]) => {
 // }
 
 //sin(sin(x));
+// for (let i = 0; i < DATA_POINTS; i++) {
+//   let x = (i / DATA_POINTS + 1) * 18;
+//   data.push({
+//     x,
+//     y: Math.sin(2 * Math.sin(2 * Math.sin(2 * Math.sin(x)))),
+//   });
+// }
+
+//sin(sin(sin(x)));
 for (let i = 0; i < DATA_POINTS; i++) {
-  let x = (i / DATA_POINTS + 1) * 18;
+  let x = (i / DATA_POINTS + 1) * 8;
   data.push({
     x,
-    y: Math.sin(2 * Math.sin(2 * Math.sin(2 * Math.sin(x)))),
+    y: Math.sin(3 * Math.sin(3 * Math.sin(2 * Math.sin(x)))),
   });
 }
 
@@ -125,15 +134,15 @@ const PerceptronCard = () => {
           width={1920 * 0.7}
           height={1080 * 0.7}
           margin={{
-            top: 100,
+            top: 200,
             right: 0,
-            bottom: 100,
+            bottom: 200,
             left: 0,
           }}
           colors={{
-            background: "DarkSlateBlue",
+            background: "MidnightBlue",
             trainingData: "LightGrey",
-            predictionHistory: ["Cyan", "Yellow"],
+            predictionHistory: ["Cyan", "Magenta"],
             prediction: "OrangeRed",
             mae: "Cyan",
             text: "Snow",
@@ -142,10 +151,10 @@ const PerceptronCard = () => {
           description="Learning a random curve with a 2 layer network. Activation tanh, optimizer sgd."
           xs={xs}
           ys={ys}
-          epochs={1000}
+          epochs={5000}
           batchSize={undefined}
-          yieldEvery={1000}
-          history={50}
+          yieldEvery={0}
+          history={300}
           drawAxis={false}
           model={tf.sequential({
             layers: [

@@ -28,7 +28,6 @@ const LineChartControl = (props: {
   epoch: number;
   batch: number;
   meanAbsoluteError: number;
-  yieldEvery: number;
   predictions: Path[];
   mae: Path;
   drawAxis?: boolean;
@@ -36,6 +35,8 @@ const LineChartControl = (props: {
 }) => {
   const { width, height, zoom } = props;
   const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const [lastUpdate, setLastUpdate] = useState(d3.now());
 
   useEffect(() => {
     const {
@@ -49,7 +50,6 @@ const LineChartControl = (props: {
       epoch,
       batch,
       meanAbsoluteError,
-      yieldEvery,
       mae,
       title,
       drawAxis,
@@ -101,7 +101,7 @@ const LineChartControl = (props: {
       // Draw lines
       const line = d3
         .line<Point>()
-        .curve(d3.curveBasis)
+        //.curve(d3.curveBasis)
         .x((d: Point) => {
           return xScale(d.x);
         })
@@ -120,10 +120,10 @@ const LineChartControl = (props: {
       maeUpdate
         .enter()
         .append("path")
-        .attr("fill", "none")
-        .attr("stroke", colors.mae)
-        .attr("stroke-width", 0.25)
-        .attr("opacity", 0.6)
+        .style("fill", "none")
+        .style("stroke", colors.mae)
+        .style("stroke-width", 0.25)
+        .style("opacity", 0.6)
         .attr("d", (d) => line(d.points));
 
       maeUpdate.exit().remove();
@@ -138,12 +138,12 @@ const LineChartControl = (props: {
       trainUpdate
         .enter()
         .append("path")
-        .attr("fill", "none")
-        .attr("stroke", colors.trainingData)
-        .attr("stroke-width", 12)
-        // .attr("stroke-dasharray", "0 25")
-        .attr("stroke-linecap", "round")
-        .attr("opacity", 0.8)
+        .style("fill", "none")
+        .style("stroke", colors.trainingData)
+        .style("stroke-width", 12)
+        // .style("stroke-dasharray", "0 25")
+        .style("stroke-linecap", "round")
+        .style("opacity", 0.8)
         .attr("d", (d) => line(d.points));
 
       trainUpdate.exit().remove();
@@ -166,14 +166,13 @@ const LineChartControl = (props: {
       historyUpdate
         .enter()
         .append("path")
-        .attr("fill", "none")
-        .attr("stroke", (_, i) => color(i))
-        .attr("stroke-width", 0.5)
-        .attr("opacity", 0.6)
+        .style("fill", "none")
+        .style("stroke", (_, i) => color(i))
+        .style("stroke-width", 0.5)
+        .style("opacity", 0.6)
         .attr("d", (d) => line(d.points));
 
-      historyUpdate.attr("stroke", (_, i) => color(i));
-
+      historyUpdate.style("stroke", (_, i) => color(i));
       historyUpdate.exit().remove();
 
       // Draw prediction
@@ -192,19 +191,19 @@ const LineChartControl = (props: {
 
       predictionUpdate
         .transition()
-        .duration(yieldEvery / 3) // yield is approximate
-        .ease(d3.easeSin)
+        .duration(d3.now() - lastUpdate)
+        .ease(d3.easeLinear)
         .attr("d", (d) => line(d.points));
 
       predictionUpdate
         .enter()
         .append("path")
-        .attr("fill", "none")
-        .attr("stroke", colors.prediction)
-        .attr("stroke-width", 12)
+        .style("fill", "none")
+        .style("stroke", colors.prediction)
+        .style("stroke-width", 12)
         // .attr("stroke-dasharray", "0 25")
-        .attr("stroke-linecap", "round")
-        .attr("opacity", 0.8)
+        .style("stroke-linecap", "round")
+        .style("opacity", 0.8)
         .attr("d", (d) => line(d.points));
 
       predictionUpdate.exit().remove();
@@ -252,6 +251,8 @@ const LineChartControl = (props: {
         .text(
           `${title} \u2022 ${new Date().toLocaleDateString()} \u2022 deep@cyin.org`
         );
+
+      setLastUpdate(d3.now());
     }
   }, [svgRef, props]);
 
