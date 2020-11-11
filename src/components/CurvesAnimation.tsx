@@ -23,7 +23,7 @@ import { setTimeout } from "timers";
 import Accordion from "react-bootstrap/esm/Accordion";
 import { Card } from "react-bootstrap";
 
-const PerceptronAnimation = (props: {
+const CurvesAnimation = (props: {
   width: number;
   height: number;
   margin: {
@@ -49,7 +49,8 @@ const PerceptronAnimation = (props: {
   epochs: number;
   batchSize: number | undefined;
   yieldEvery: number;
-  history: number;
+  updateEvery: number;
+  maxHistory: number;
   drawAxis?: boolean;
   zoom?: boolean;
 }) => {
@@ -68,7 +69,8 @@ const PerceptronAnimation = (props: {
     epochs,
     batchSize,
     yieldEvery,
-    history,
+    updateEvery,
+    maxHistory,
     zoom = false,
     drawAxis = false,
   } = state;
@@ -76,15 +78,13 @@ const PerceptronAnimation = (props: {
   const [trainingData, setTrainingData] = useState<{
     epoch: number;
     batch: number;
-    meanAbsoluteError: number;
+    logs: any;
     predictions: Path[];
-    mae: Path;
   }>({
     epoch: 0,
     batch: 0,
-    meanAbsoluteError: 0,
+    logs: {},
     predictions: [],
-    mae: { key: "mae", points: [] },
   });
 
   const [modelCompiled, setModelCompiled] = useState(false);
@@ -92,11 +92,11 @@ const PerceptronAnimation = (props: {
   const [timeoutBeforeTrain, setTimeoutBeforeTrain] = useState(false);
   const [startTime, setStartTime] = useState(Date.now());
 
-  const toggleTimeoutBeforeTrain = (event: React.ChangeEvent) => {
+  const toggleTimeoutBeforeTrain = (_event: React.FormEvent) => {
     setTimeoutBeforeTrain(!timeoutBeforeTrain);
   };
 
-  const toggleZoom = (event: React.MouseEvent) => {
+  const toggleZoom = (_event: React.MouseEvent) => {
     setState({ ...state, zoom: !zoom });
   };
 
@@ -117,7 +117,7 @@ const PerceptronAnimation = (props: {
   const saveModel = async (event: React.MouseEvent) => {
     event.preventDefault();
     let result = await model.save("localstorage://sine-model");
-    console.log(`Model saved: ${JSON.stringify(result)}`);
+    console.log(`Saved model: ${JSON.stringify(result)}`);
   };
 
   const freezeLayers = async (event: React.MouseEvent) => {
@@ -135,9 +135,7 @@ const PerceptronAnimation = (props: {
       let weights = layers[i].getWeights();
       let newWeigths = [];
       for (let j = 0; j < weights.length; j++) {
-        newWeigths.push(
-          tf.randomUniform(weights[j].shape, -0.5, 0.5, "float32", j)
-        );
+        newWeigths.push(tf.randomUniform(weights[j].shape, -0.5, 0.5));
       }
       layers[i].setWeights(newWeigths);
       console.log(`Resetting layer ${i}`);
@@ -146,11 +144,10 @@ const PerceptronAnimation = (props: {
 
   const loadModel = async (event: React.MouseEvent) => {
     event.preventDefault();
-    let m = (await tf.loadLayersModel(
-      "localstorage://sine-model"
-    )) as tf.Sequential;
+    const name = "localstorage://sine-model";
+    let m = (await tf.loadLayersModel(name)) as tf.Sequential;
     setState({ ...state, model: m });
-    console.log("model loaded");
+    console.log(`Loaded model ${name}`);
   };
 
   const clearTraining = async (event: React.MouseEvent) => {
@@ -158,9 +155,8 @@ const PerceptronAnimation = (props: {
     setTrainingData({
       epoch: 0,
       batch: 0,
-      meanAbsoluteError: 0,
+      logs: {},
       predictions: [],
-      mae: { key: "mae", points: [] },
     });
     model.layers.forEach((layer) => {
       let weights = layer.getWeights();
@@ -169,55 +165,54 @@ const PerceptronAnimation = (props: {
     });
   };
 
-  const updateTrainingData = (
+  const updateTrainingData = async (
     epoch: number,
     batch: number,
-    meanAbsoluteError: number
+    logs: tf.Logs
   ) => {
     // Add new mean absolute error
-    trainingData.mae.points.push({
-      x: epoch / epochs + (batch / epochs) * 0.01,
-      y: meanAbsoluteError,
-    });
+    // trainingData.mae.points.push({
+    //   x: epoch / epochs + (batch / epochs) * 0.01,
+    //   y: meanAbsoluteError,
+    // });
 
     tf.tidy(() => {
       const xt: number[] = [];
-      for (let x = 0; x < 1.005; x += 0.005) {
+      for (let x = 0; x < 1.01; x += 0.01) {
         xt.push(x);
       }
 
       let prediction = model.predict(tf.tensor(xt)) as tf.Tensor;
-      let path: Path = { key: `e${epoch}b${batch}`, points: [] };
 
       prediction.data().then((array) => {
+        let path: Path = {
+          key: `e${epoch}b${batch}`,
+          points: [],
+        };
         array.forEach((d: number, i: number) =>
           path.points.push({ x: xt[i], y: d })
         );
-        prediction.dispose();
 
         trainingData.predictions.push(path);
-
-        if (trainingData.predictions.length > history) {
-          const toDelete = Math.round(
-            Math.random() * trainingData.predictions.length - 1
-          );
-          trainingData.predictions = trainingData.predictions.filter(
-            (_, i) => i !== toDelete
-          );
-        }
 
         setTrainingData({
           ...trainingData,
           epoch,
           batch,
-          meanAbsoluteError,
+          logs,
         });
+
+        if (trainingData.predictions.length > maxHistory) {
+          trainingData.predictions = trainingData.predictions.filter(
+            (_, i) =>
+              //Number.isInteger(Math.log2(i))
+              i > 10 && i % 2 === 0
+          );
+        }
+
+        prediction.dispose();
       });
     });
-  };
-
-  const onYield = (epoch: number, batch: number, logs: tf.Logs) => {
-    updateTrainingData(epoch, batch | 0, logs.mae);
   };
 
   const trainModel = async (event: React.MouseEvent) => {
@@ -229,20 +224,39 @@ const PerceptronAnimation = (props: {
       await model
         .fit(tf.tensor1d(xs), tf.tensor1d(ys), {
           epochs: +epochs,
-          batchSize: batchSize,
+          batchSize: batchSize ? +batchSize : undefined,
           shuffle: false,
           validationSplit: 0.3,
-          yieldEvery: yieldEvery ? +yieldEvery : undefined,
+          yieldEvery: yieldEvery ? +yieldEvery : "auto",
           callbacks: {
-            onYield,
+            // onYield: async (epoch: number, batch: number, logs: tf.Logs) => {
+            //   updateTrainingData(epoch, batch | 0, logs || {});
+            // },
+            onEpochBegin: async (epoch: number, logs: tf.Logs | undefined) => {
+              //console.time("epochs");
+              if (epoch % updateEvery === 0) {
+                updateTrainingData(epoch, 0, logs || {});
+              }
+            },
+
+            // onEpochEnd: async (epoch: number, logs: tf.Logs | undefined) => {
+            //   if (epoch % updateEvery === 0) {
+            //     //console.log(logs);
+            //     updateTrainingData(epoch, 0, logs || {});
+            //   }
+            // },
+
+            //   //console.timeEnd("epochs");
+            // },
+            // onTrainEnd: async (logs: any) => {
+            //   updateTrainingData(epochs, 0, logs.mae);
+            // },
           },
         })
         .then((info) => {
-          updateTrainingData(
-            epochs,
-            0,
-            info.history.val_mae.slice(-1)[0] as number
-          );
+          updateTrainingData(info.epoch.slice(-1)[0], 0, {
+            mae: info.history.val_mae.slice(-1)[0] as number,
+          });
           console.log("Final error: " + info.history.val_mae.slice(-1)[0]);
           setModelTraining(false);
         });
@@ -251,7 +265,7 @@ const PerceptronAnimation = (props: {
     if (!timeoutBeforeTrain) {
       train();
     } else {
-      setTimeout(train, 15000);
+      setTimeout(train, 20000);
     }
   };
 
@@ -284,9 +298,8 @@ const PerceptronAnimation = (props: {
         ys={ys}
         epoch={trainingData.epoch}
         batch={trainingData.batch}
-        meanAbsoluteError={trainingData.meanAbsoluteError}
+        logs={trainingData.logs}
         predictions={trainingData.predictions}
-        mae={trainingData.mae}
         drawAxis={drawAxis}
         zoom={zoom}
       />
@@ -344,7 +357,7 @@ const PerceptronAnimation = (props: {
         </Button>
       </div>
 
-      <Accordion className="mt-4">
+      <Accordion className="mt-4" defaultActiveKey="0">
         <Card>
           <Card.Header>
             <Accordion.Toggle as={Button} variant="link" eventKey="0">
@@ -362,7 +375,7 @@ const PerceptronAnimation = (props: {
                   <Col className="col-3">Batch: {trainingData.batch}</Col>
                   <Col className="col-4">
                     Mean Absolute Error:{" "}
-                    {(trainingData.meanAbsoluteError * 100).toFixed(2)}%
+                    {(trainingData.logs.mae * 100).toFixed(2)}%
                   </Col>
                 </Row>
                 <Row>
@@ -370,13 +383,12 @@ const PerceptronAnimation = (props: {
                     Time: {msToTime(Date.now() - startTime)}
                   </Col>
                   <Col className="col-3">
-                    Remaining:{" "}
+                    Epochs/Minute:{" "}
                     {trainingData.epoch > 0
-                      ? msToTime(
-                          ((epochs - trainingData.epoch) *
-                            (Date.now() - startTime)) /
-                            trainingData.epoch
-                        )
+                      ? (
+                          (trainingData.epoch / (Date.now() - startTime)) *
+                          60000
+                        ).toFixed(2)
                       : 0}
                   </Col>
                   <Col className="col-2">
@@ -433,6 +445,19 @@ const PerceptronAnimation = (props: {
                   </Col>
                   <Col className="col-2">
                     <Form.Group>
+                      <Form.Label>Batch size</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="batchSize"
+                        value={batchSize}
+                        disabled={modelTraining}
+                        onChange={handleOnChange}
+                      ></Form.Control>
+                      <Form.Text>Epochs to train</Form.Text>
+                    </Form.Group>
+                  </Col>
+                  <Col className="col-2">
+                    <Form.Group>
                       <Form.Label>Yield every</Form.Label>
                       <Form.Control
                         type="number"
@@ -442,6 +467,32 @@ const PerceptronAnimation = (props: {
                         onChange={handleOnChange}
                       ></Form.Control>
                       <Form.Text>Yield every n millis</Form.Text>
+                    </Form.Group>
+                  </Col>
+                  <Col className="col-2">
+                    <Form.Group>
+                      <Form.Label>Update every</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="updateEvery"
+                        value={updateEvery}
+                        disabled={modelTraining}
+                        onChange={handleOnChange}
+                      ></Form.Control>
+                      <Form.Text>Update every n epoch</Form.Text>
+                    </Form.Group>
+                  </Col>
+                  <Col className="col-2">
+                    <Form.Group>
+                      <Form.Label>History</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="maxHistory"
+                        value={maxHistory}
+                        disabled={modelTraining}
+                        onChange={handleOnChange}
+                      ></Form.Control>
+                      <Form.Text>Maximal History</Form.Text>
                     </Form.Group>
                   </Col>
                   <Col className="col-4">
@@ -480,7 +531,7 @@ const PerceptronAnimation = (props: {
   );
 };
 
-PerceptronAnimation.defaultProps = {
+CurvesAnimation.defaultProps = {
   width: 1920,
   height: 1080,
   label: "deep@cyin.org",
@@ -488,4 +539,4 @@ PerceptronAnimation.defaultProps = {
   stopTraining: false,
 };
 
-export default PerceptronAnimation;
+export default CurvesAnimation;

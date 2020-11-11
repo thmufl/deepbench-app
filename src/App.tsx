@@ -10,9 +10,11 @@ import "./App.css";
 
 import SideNav from "./components/SideNav";
 import Home from "./components/Home";
-import PerceptronCard from "./components/PerceptronCard";
+import GradientDescentCard from "./components/GradientDescentControl";
+import CurvesCard from "./components/CurvesCard";
 import ColorCircleCard from "./components/ColorCircleCard";
 import AtRandomAnimationCard from "./components/AtRandomAnimationCard";
+import LSTMTest from "./components/LSTMTest";
 
 function App() {
   return (
@@ -22,20 +24,24 @@ function App() {
           <SideNav
             items={[
               { title: "Home", path: "/home" },
-              { title: "Perceptron", path: "/perceptron" },
+              { title: "Gradient Descent", path: "/gradient-descent" },
+              { title: "Curves", path: "/curves" },
               { title: "Color Circle", path: "/color-circle" },
               { title: "At Random", path: "/random" },
               { title: "Learning OR", path: "/or" },
               { title: "Learning XOR", path: "/xor" },
+              { title: "LSTM Test", path: "/lstm" },
             ]}
           />
         </Col>
         <Col sm={10}>
           <Switch>
             <Route path="/home" component={Home} />
-            <Route path="/perceptron" component={PerceptronCard} />
+            <Route path="/gradient-descent" component={GradientDescentCard} />
+            <Route path="/curves" component={CurvesCard} />
             <Route path="/color-circle" component={ColorCircleCard} />
             <Route path="/random" component={AtRandomAnimationCard} />
+            <Route path="/lstm" component={LSTMTest} />
 
             <Redirect from="/" exact to="/home" />
             <Redirect to="/not-found" />

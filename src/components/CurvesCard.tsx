@@ -6,7 +6,7 @@ import Card from "react-bootstrap/Card";
 
 import * as tf from "@tensorflow/tfjs";
 
-import PerceptronAnimation from "./PerceptronAnimation";
+import CurvesAnimation from "./CurvesAnimation";
 
 let DATA_POINTS = 600;
 let data: any[] = [];
@@ -39,7 +39,15 @@ const shuffle = (array: any[]) => {
 
 //Sine;
 // for (let i = 0; i < DATA_POINTS; i++) {
-//   let angle = Math.random() * 12 * Math.PI;
+//   let angle = Math.random() * 4 * Math.PI;
+//   data.push({ x: angle, y: Math.sin(angle) });
+// }
+
+// Variable Sine
+// const l = Math.round(Math.random() * 16);
+// console.log("l", l);
+// for (let i = 0; i < DATA_POINTS; i++) {
+//   let angle = Math.random() * l * Math.PI;
 //   data.push({ x: angle, y: Math.sin(angle) });
 // }
 
@@ -72,24 +80,26 @@ const shuffle = (array: any[]) => {
 // const b = 0.2115142870470018 * 14 * Math.PI;
 // const c = 0.6345657331481362 * 6 * Math.PI;
 
-// const a = Math.random() * 10 * Math.PI;
-// const b = Math.random() * 10 * Math.PI;
-// const c = Math.random() * 10 * Math.PI;
-// const d = Math.random() * 10 * Math.PI;
+const a = Math.random() * 2 * Math.PI;
+const b = Math.random() * 4 * Math.PI;
+const c = Math.random() * 8 * Math.PI;
+const d = Math.random() * 16 * Math.PI;
+const e = Math.random() * 32 * Math.PI;
 
-// console.log("random vars", { a: a, b: b, c: c });
+console.log("random vars", { a: a, b: b, c: c, d: d, e: e });
 
-// for (let i = 0; i < DATA_POINTS; i++) {
-//   let x = i / DATA_POINTS;
-//   data.push({
-//     x,
-//     y:
-//       Math.sin(a * x) *
-//       Math.cos(b * x * x) *
-//       Math.sin(c * x * x * x) *
-//       Math.cos(d * x * x * x * x),
-//   });
-// }
+for (let i = 0; i < DATA_POINTS; i++) {
+  let x = i / DATA_POINTS;
+  data.push({
+    x,
+    y:
+      Math.sin(a * x) *
+      Math.sin(b * x) *
+      Math.sin(c * x) *
+      Math.sin(d * x) *
+      Math.sin(e * x),
+  });
+}
 
 //sin(sin(x));
 // for (let i = 0; i < DATA_POINTS; i++) {
@@ -101,13 +111,13 @@ const shuffle = (array: any[]) => {
 // }
 
 //sin(sin(sin(x)));
-for (let i = 0; i < DATA_POINTS; i++) {
-  let x = (i / DATA_POINTS + 1) * 8;
-  data.push({
-    x,
-    y: Math.sin(3 * Math.sin(3 * Math.sin(2 * Math.sin(x)))),
-  });
-}
+// for (let i = 0; i < DATA_POINTS; i++) {
+//   let x = (i / DATA_POINTS + 1) * 8;
+//   data.push({
+//     x,
+//     y: Math.sin(3 * Math.sin(3 * Math.sin(2 * Math.sin(x)))),
+//   });
+// }
 
 data = shuffle(data);
 
@@ -117,44 +127,52 @@ let ys = data.map((d) => d.y);
 let xScale: any = d3.scaleLinear().domain([d3.min(xs) || 0, d3.max(xs) || 1]);
 xs = xs.map((d) => xScale(d));
 
-let yScale: any = d3.scaleLinear().domain([d3.min(ys) || -1, d3.max(ys) || 1]);
+let yScale: any = d3
+  .scaleLinear()
+  .domain([d3.min(ys) || -1, d3.max(ys) || 1])
+  .range([-0.5, 0.5]);
+// let yScale: any = d3
+//   .scaleLinear()
+//   .domain([d3.min(ys) || -1, d3.max(ys) || 1])
+//   .range([-0.05, 0.05]);
 ys = ys.map((d) => yScale(d));
 
-const PerceptronCard = () => {
+const CurvesCard = () => {
   return (
     <Card style={{ width: "auto" }}>
       <Card.Header>Header</Card.Header>
       <Card.Body>
-        <Card.Title>Perceptron</Card.Title>
+        <Card.Title>Curves</Card.Title>
         <Card.Subtitle className="mb-2 text-muted">
-          Play around with a single Perceptron.
+          Learning arbitrary, non-linear curves
         </Card.Subtitle>
         <Card.Text>Lore ipsum</Card.Text>
-        <PerceptronAnimation
-          width={1920 * 0.7}
-          height={1080 * 0.7}
+        <CurvesAnimation
+          width={1920 * 0.6}
+          height={1080 * 0.6}
           margin={{
-            top: 200,
+            top: 10,
             right: 0,
-            bottom: 200,
+            bottom: 20,
             left: 0,
           }}
           colors={{
-            background: "MidnightBlue",
-            trainingData: "LightGrey",
-            predictionHistory: ["Cyan", "Magenta"],
-            prediction: "OrangeRed",
-            mae: "Cyan",
-            text: "Snow",
+            background: "Gold",
+            trainingData: "SteelBlue",
+            predictionHistory: ["LightBlue", "SteelBlue"],
+            prediction: "Crimson",
+            mae: "Yellow",
+            text: "Black",
           }}
-          title="Learning Trigonometric Waves III"
+          title="Curves - Basic Training of a Sine VI"
           description="Learning a random curve with a 2 layer network. Activation tanh, optimizer sgd."
           xs={xs}
           ys={ys}
-          epochs={5000}
+          epochs={2500}
           batchSize={undefined}
           yieldEvery={0}
-          history={300}
+          updateEvery={5}
+          maxHistory={32}
           drawAxis={false}
           model={tf.sequential({
             layers: [
@@ -172,8 +190,8 @@ const PerceptronCard = () => {
           })}
           modelCompileArgs={{
             //optimizer: "adam", // sgd, adam, adamax, adagrad, adadelta, rmsprop
-            optimizer: tf.train.adam(0.001),
-            //optimizer: "adam",
+            //optimizer: tf.train.adam(0.001),
+            optimizer: "adam",
             loss: "meanAbsoluteError", // meanAbsoluteError, meanSquaredError, categoricalCrossentropy
             metrics: ["mae", "mse", "acc"],
           }}
@@ -184,4 +202,4 @@ const PerceptronCard = () => {
     </Card>
   );
 };
-export default PerceptronCard;
+export default CurvesCard;

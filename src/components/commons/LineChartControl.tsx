@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, Fragment } from "react";
 import * as d3 from "d3";
 
 import { Point, Path } from "./Types";
+import ReactDOM from "react-dom";
 
 const LineChartControl = (props: {
   width: number;
@@ -27,16 +28,15 @@ const LineChartControl = (props: {
   ys: number[];
   epoch: number;
   batch: number;
-  meanAbsoluteError: number;
+  logs: any;
   predictions: Path[];
-  mae: Path;
   drawAxis?: boolean;
   zoom: boolean;
 }) => {
   const { width, height, zoom } = props;
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const [lastUpdate, setLastUpdate] = useState(d3.now());
+  const [lastEpoch, setLastEpoch] = useState(0);
 
   useEffect(() => {
     const {
@@ -49,8 +49,7 @@ const LineChartControl = (props: {
       ys,
       epoch,
       batch,
-      meanAbsoluteError,
-      mae,
+      logs,
       title,
       drawAxis,
     } = props;
@@ -66,7 +65,10 @@ const LineChartControl = (props: {
     };
 
     const xScale: any = d3.scaleLinear().domain([0, 1]).range([0, w]);
-    const yScale: any = d3.scaleLinear().domain([1, 0]).range([0, h]);
+    const yScale: any = d3
+      .scaleLinear()
+      .domain([1, 0])
+      .range([0, h / 2.5]);
 
     const xAxis = d3.axisBottom(xScale);
     const yAxis = d3.axisLeft(yScale);
@@ -89,47 +91,30 @@ const LineChartControl = (props: {
         main
           .append("g")
           .attr("class", "x-axis")
-          .attr("transform", `translate(0, ${h / 2})`)
+          .attr("transform", `translate(0, ${h / 4})`)
           .call(xAxis);
         main
           .append("g")
           .attr("class", "y-axis")
-          .attr("transform", `translate(${w / 2}, 0)`)
+          .attr("transform", `translate(${w / 4}, 0)`)
           .call(yAxis);
       }
 
-      // Draw lines
+      // lines generator
       const line = d3
         .line<Point>()
-        //.curve(d3.curveBasis)
+        .curve(d3.curveNatural)
         .x((d: Point) => {
           return xScale(d.x);
         })
         .y((d: Point) => yScale(d.y));
 
-      // Draw mae
-      main.append("g").attr("class", "mae");
-
-      const maeUpdate = d3
-        .selectAll(".mae")
-        .selectAll<SVGSVGElement, Path>("path")
-        .data([mae]);
-
-      maeUpdate.attr("d", (d) => line(d.points));
-
-      maeUpdate
-        .enter()
-        .append("path")
-        .style("fill", "none")
-        .style("stroke", colors.mae)
-        .style("stroke-width", 0.25)
-        .style("opacity", 0.6)
-        .attr("d", (d) => line(d.points));
-
-      maeUpdate.exit().remove();
-
       // Draw training data
-      main.append("g").attr("class", "training-data");
+      main
+        .append("g")
+        .attr("class", "training-data")
+        .attr("transform", `translate(${0}, ${-60})`);
+
       const trainUpdate = d3
         .select(".training-data")
         .selectAll<SVGSVGElement, Path>("path")
@@ -140,16 +125,19 @@ const LineChartControl = (props: {
         .append("path")
         .style("fill", "none")
         .style("stroke", colors.trainingData)
-        .style("stroke-width", 12)
-        // .style("stroke-dasharray", "0 25")
+        .style("stroke-width", 20)
+        //.style("stroke-dasharray", "0 25")
         .style("stroke-linecap", "round")
-        .style("opacity", 0.8)
+        .style("opacity", 0.9)
         .attr("d", (d) => line(d.points));
 
       trainUpdate.exit().remove();
 
       // Draw history
-      main.append("g").attr("class", "prediction-history");
+      main
+        .append("g")
+        .attr("transform", `translate(${0}, ${h - 400})`)
+        .attr("class", "prediction-history");
 
       const colorScale: any = d3.scaleLinear().domain([0, predictions.length]);
       const color = (i: number) =>
@@ -168,7 +156,7 @@ const LineChartControl = (props: {
         .append("path")
         .style("fill", "none")
         .style("stroke", (_, i) => color(i))
-        .style("stroke-width", 0.5)
+        .style("stroke-width", 1)
         .style("opacity", 0.6)
         .attr("d", (d) => line(d.points));
 
@@ -176,7 +164,10 @@ const LineChartControl = (props: {
       historyUpdate.exit().remove();
 
       // Draw prediction
-      main.append("g").attr("class", "prediction");
+      main
+        .append("g")
+        .attr("transform", `translate(${0}, ${h - 400})`)
+        .attr("class", "prediction");
 
       const prediction = predictions.slice(
         predictions.length - 1,
@@ -184,26 +175,32 @@ const LineChartControl = (props: {
       );
       if (prediction.length > 0) prediction[0].key = "prediction";
 
-      const predictionUpdate = d3
+      const predictionUpdate = svg
         .selectAll(".prediction")
         .selectAll<SVGSVGElement, Path>("path")
         .data(prediction, (d) => d.key);
 
+      predictionUpdate.interrupt();
+
+      if (lastEpoch === 0) setLastEpoch(d3.now());
+      //console.log(0.8 * (d3.now() - lastEpoch));
       predictionUpdate
         .transition()
-        .duration(d3.now() - lastUpdate)
+        .duration(0.3 * (d3.now() - lastEpoch))
         .ease(d3.easeLinear)
         .attr("d", (d) => line(d.points));
+
+      setLastEpoch(d3.now());
 
       predictionUpdate
         .enter()
         .append("path")
         .style("fill", "none")
         .style("stroke", colors.prediction)
-        .style("stroke-width", 12)
-        // .attr("stroke-dasharray", "0 25")
+        .style("stroke-width", 10)
+        //.attr("stroke-dasharray", "0 25")
         .style("stroke-linecap", "round")
-        .style("opacity", 0.8)
+        .style("opacity", 0.9)
         .attr("d", (d) => line(d.points));
 
       predictionUpdate.exit().remove();
@@ -226,9 +223,9 @@ const LineChartControl = (props: {
         .selectAll(".metrics")
         .style("fill", colors.text)
         .text(
-          `Epoch: ${("0000" + epoch).substr(-4)} \u2022 Batch: ${(
+          `Epoch: ${("00000" + epoch).substr(-5)} \u2022 Batch: ${(
             "000" + batch
-          ).substr(-3)} \u2022 Error: ${(meanAbsoluteError * 100).toFixed(2)}%`
+          ).substr(-3)} \u2022 Error: ${(logs.mae * 100).toFixed(2)}%`
         );
 
       // label
@@ -251,8 +248,6 @@ const LineChartControl = (props: {
         .text(
           `${title} \u2022 ${new Date().toLocaleDateString()} \u2022 deep@cyin.org`
         );
-
-      setLastUpdate(d3.now());
     }
   }, [svgRef, props]);
 
