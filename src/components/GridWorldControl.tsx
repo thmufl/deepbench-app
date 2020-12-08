@@ -24,7 +24,9 @@ const GridWorldControl = (props: {
     epsilon: number
 }) => {
 
-    const {width, height, modelCompileArgs, epochs, gamma, epsilon } = props;
+    const {width, height, modelCompileArgs, epochs, gamma } = props;
+    let { epsilon } = props;
+
     const [world, setWorld] = useState(props.world);
     const [model, setModel] = useState(props.model);
 
@@ -32,15 +34,36 @@ const GridWorldControl = (props: {
     const directions = ["up", "down", "left", "right"];
 
     const move = (direction: string) => {
-        let reward = world.move(direction);
-        setWorld({...world, reward});
-        return reward;
+        let state = world.move(direction);
+        setWorld({...world });
+        return state;
     }
 
-    const handleMoveUp = (event: React.MouseEvent) => move("up");
-    const handleMoveDown = (event: React.MouseEvent) => move("down");
-    const handleMoveLeft = (event: React.MouseEvent) => move("left");
-    const handleMoveRight = (event: React.MouseEvent) => move("right");
+    const moveUp = (event: React.MouseEvent) => { event.preventDefault(); move("up");}
+    const moveDown = (event: React.MouseEvent) => { event.preventDefault(); move("down"); }
+    const moveLeft = (event: React.MouseEvent) => { event.preventDefault(); move("left"); }
+    const moveRight = (event: React.MouseEvent) => { event.preventDefault(); move("right"); }
+
+    const run = (event: React.MouseEvent) => {
+        event.preventDefault();
+        tf.tidy(() => {
+            let steps = 0;
+            const id = setInterval(() => {
+                let state = tf.tensor3d(world.state()).reshape([1, 64]);
+                let qval = model.predict(state) as tf.Tensor;
+                let action = tf.argMax(qval.reshape([4])).dataSync()[0];
+                console.log("action", directions[action]);
+                world.move(directions[action]);
+                let reward = world.calculateReward();
+                setWorld({...world});
+                steps++;
+                qval.dispose();
+                state.dispose();
+                if(reward === 10 || reward === -10 || steps === 20)
+                    clearInterval(id);
+            }, 250);
+        });
+    };
 
     const compileModel = (event: React.MouseEvent) => {
         event.preventDefault();
@@ -48,7 +71,105 @@ const GridWorldControl = (props: {
         setModelState({...modelState, compiled: true });
         console.log(model.summary());
       };
-    
+
+    const trainModel = async (event: React.MouseEvent) => {
+        console.log("Starting training model for " + epochs + " epochs." )
+        setModelState({...modelState, training: true });
+
+        let posCount = 0;
+        let minCount = 0;
+        const maxMoves = 128;
+
+        let xs: any[] = [];
+        let ys: any[] = [];
+
+        for(let epoch = 0; epoch < epochs; epoch++) {   
+            //console.log("***** start epoch: " + epoch + " *****")
+            const startTime = Date.now();
+            
+            let status = 1;
+            let moves = 0;
+
+            world.init();
+            setWorld({...world, positions: {...world.positions}, actions: {...[]}})
+            //world.print();
+
+            while(status === 1) {
+                tf.tidy(() => {
+                    if(moves % 5 === 0) setWorld({...world, positions: {...world.positions}, actions: {...world.actions}})
+
+                    const state0 = tf.tensor3d(world.state()).reshape([1, 64])
+                        .add(tf.randomNormal([64]).div(10));
+
+                    const qval0 = model.predict(state0) as tf.Tensor;
+                    
+                    let action = null;
+                    if(Math.random() < epsilon) {
+                        action = Math.floor(Math.random() * 4);
+                    } else {
+                        action = tf.argMax(qval0.reshape([4])).dataSync()[0];
+                    }
+                    
+                    const nextState = world.move(directions[action]);
+                    const reward = world.calculateReward();
+ 
+                    const state1 = tf.tensor3d(nextState).reshape([1, 64])
+                        .add(tf.randomNormal([64]).div(10));
+
+                    const qval1 = model.predict(state1) as tf.Tensor;
+                    const maxQ = tf.max(qval1.reshape([4])).dataSync()[0];
+
+                    const qval = qval0.reshape([4]).dataSync();
+                    qval[action] = reward + gamma * maxQ;
+                    
+                    if(reward !== -1 || moves > maxMoves) { 
+                        status = 0;
+                        qval[action] = reward;
+                        if(reward === 10) {
+                            posCount++;
+                        } else { 
+                            minCount++;
+                        }
+                        //world.print();
+                        setWorld({...world, positions: {...world.positions}, actions: {...world.actions}});
+                    }
+                    //qval[action] = 0.5 * qval[action];
+                    xs.push(state0.dataSync());
+                    ys.push(qval);
+                    moves++;
+                });
+            }
+            if(epsilon > 0.1) epsilon -= 1 / epochs;
+
+            //console.log("queue length: " + xs.length);
+            if(xs.length < 2048) {
+                continue;
+            } else {
+                console.log("Training model on " + xs.length + " examples.");
+                await model.fit(tf.tensor(xs), tf.tensor(ys), {
+                    epochs: 100,
+                    batchSize: 64,
+                    shuffle: true
+                }).then((info) => { 
+                    console.log("Epoch: " + epoch +  
+                    ", epsilon: " + epsilon.toFixed(2) + 
+                    ", pos/min: " + (minCount !== 0 ? (posCount / minCount).toFixed(2) : 0) + 
+                    ", acc: " + info.history.acc.slice(-1)[0] + 
+                    ", ms/epoch: " + ((Date.now() - startTime)).toFixed(2));
+                });
+                xs = xs.slice(1024);
+                ys = ys.slice(1024);
+            }
+        }
+        setModelState({...modelState, training: false });
+    }
+
+    const stopTrainingModel = async (event: React.MouseEvent) => {
+        event.preventDefault();
+        model.stopTraining = true;
+        setModelState({...modelState, training: false });
+    };
+
     const saveModel = async (event: React.MouseEvent) => {
         event.preventDefault();
         let result = await model.save("localstorage://gridworld-model");
@@ -58,45 +179,9 @@ const GridWorldControl = (props: {
     const loadModel = async (event: React.MouseEvent) => {
         event.preventDefault();
         const name = "localstorage://gridworld-model";
-        let m = (await tf.loadLayersModel(name)) as tf.Sequential;
-        //setState({ ...state, model: m });
+        let model = (await tf.loadLayersModel(name)) as tf.Sequential;
+        setModel(model);
         console.log(`Loaded model ${name}`);
-    };
-
-    const startTrainingModel = async (event: React.MouseEvent) => {
-        console.log("start training model for " + epochs + " epochs." )
-        setModelState({...modelState, training: true });
-        for(let i = 0; i < epochs; i++) {
-            setWorld(new GridWorld(world.size, world.mode));
-            tf.tidy(() => {
-                let state = tf.tensor3d(world.state()).reshape([1, 64]);
-                let status = 1;
-                while(status === 1) {
-                    let qval = model.predict(state) as tf.Tensor;
-                    let action = null;
-                    if(Math.random() < epsilon) {
-                        action = Math.floor(Math.random() * 4);
-                    } else {
-                        action = tf.argMax(qval).dataSync()[0];
-                    }
-                    let reward = move(directions[action]);
-                    if(reward !== -1) { 
-                        status = 0;
-                    }
-                    qval.dispose();
-                }
-                state.dispose();
-            });
-            if(i % 50 === 0) console.log("epoch: " + i + ", state: ", world.state());
-        }
-
-        setModelState({...modelState, training: false });
-    }
-
-    const stopTrainingModel = async (event: React.MouseEvent) => {
-        event.preventDefault();
-        model.stopTraining = true;
-        setModelState({...modelState, training: false });
     };
 
     const svgRef = useRef<SVGSVGElement | null>(null);
@@ -113,8 +198,16 @@ const GridWorldControl = (props: {
             const svg = d3.select(svgRef.current);
             svg.style("background", colors.background);
 
+            // Problem with {...} operators
+            const positionsClean = [];
+            positionsClean.push([world.positions[0][0], world.positions[0][1]]);
+            positionsClean.push([world.positions[1][0], world.positions[1][1]]);
+            positionsClean.push([world.positions[2][0], world.positions[2][1]]);
+            positionsClean.push([world.positions[3][0], world.positions[3][1]]);
+            // console.log("positionsClean:", positionsClean)
+
             const positions = svg.selectAll<SVGGElement, number[][]>("g")
-                .data(world.positions);
+                .data(positionsClean);
                 
             const positionsEnter = positions.enter()
                 .append("g")
@@ -136,9 +229,9 @@ const GridWorldControl = (props: {
                 .style("opacity", (_, i) => {
                     switch(codes[i]) {
                         case "P": return 1.0;
-                        case "+": return 0.7;
-                        case "-": return 0.7;
-                        case "W": return 1.0;
+                        case "+": return 0.5;
+                        case "-": return 0.5;
+                        case "W": return 0.5;
                         default: return "grey"
                     }
                 })
@@ -160,7 +253,7 @@ const GridWorldControl = (props: {
                 .remove();
 
             const reward = svg.selectAll<SVGTextElement, number[]>(".reward")
-                .data([world.reward])
+                .data([world.calculateReward()])
 
             const rewardEnter = reward.enter()
                 .append("text")
@@ -181,32 +274,41 @@ const GridWorldControl = (props: {
             preserveAspectRatio="xMinYMin meet"
             ref={svgRef}
         />
-        <div className="d-flex justify-content-start mt-2"></div>
+        <div className="d-flex justify-content-start mt-2">
             <Button variant="secondary"
                     className="ml-2"
-                    onClick={compileModel}
-                    disabled={modelState.training}>Compile Model</Button>
+                    onClick={loadModel}
+                    disabled={modelState.training}>Load</Button>
 
             <Button variant="secondary"
                     className="ml-2"
-                    onClick={startTrainingModel}
-                    disabled={!modelState.compiled || modelState.training}>Start Training Model</Button>
+                    onClick={compileModel}
+                    disabled={modelState.training}>Compile</Button>
+
+            <Button variant="secondary"
+                    className="ml-2"
+                    onClick={trainModel}
+                    disabled={!modelState.compiled || modelState.training}>Train </Button>
 
             <Button variant="secondary"
                     className="ml-2"
                     onClick={stopTrainingModel}
-                    disabled={!modelState.training}>Stop Training Model</Button>
+                    disabled={!modelState.training}>Stop</Button>
 
             <Button variant="secondary"
                     className="ml-2"
                     onClick={saveModel}
-                    disabled={modelState.training}>Save Model</Button>
+                    disabled={modelState.training}>Save</Button>
 
-        <br/>
-        <Button onClick={handleMoveUp}>MoveUp</Button>
-        <Button onClick={handleMoveDown}>MoveDown</Button>
-        <Button onClick={handleMoveLeft}>MoveLeft</Button>
-        <Button onClick={handleMoveRight}>MoveRight</Button>
+        </div>
+
+        <div className="d-flex justify-content-start mt-2">
+            <Button variant="secondary" className="ml-2" onClick={moveLeft} disabled={modelState.training}>Left</Button>
+            <Button variant="secondary" className="ml-2" onClick={moveUp} disabled={modelState.training}>Up</Button>
+            <Button variant="secondary" className="ml-2"onClick={moveDown} disabled={modelState.training}>Down</Button>
+            <Button variant="secondary" className="ml-2" onClick={moveRight} disabled={modelState.training}>Right</Button>
+            <Button variant="secondary" className="ml-2" onClick={run} disabled={modelState.training}>Run</Button>
+        </div>
         </Fragment>
     )
 }
@@ -220,9 +322,9 @@ GridWorldControl.defaultProps = {
         player: "purple",
         wall: "black",
         pit: "red",
-        goal: "green"
+        goal: "blue"
     },
-    world: new GridWorld(4, "static"),
+    world: new GridWorld(4, "player"),
     model: tf.sequential({
         layers: [
             tf.layers.dense({
@@ -238,9 +340,10 @@ GridWorldControl.defaultProps = {
     gamma: 0.9,
     epsilon: 1.0,
     modelCompileArgs: {
-        optimizer: tf.train.adam(0.001),
+        optimizer: "adam", // tf.train.adam(0.001),
         loss: "meanSquaredError",
         metrics: ["mse", "acc"],
+        batchSize: 128
     },
     epochs: 1000,
   };

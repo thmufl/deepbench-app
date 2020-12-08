@@ -2,13 +2,18 @@ class GridWorld {
     size: number;
     mode: string;
     positions: number[][];
-    reward: number;
+    actions: string[] = [];
 
     defaultPositions = [[0,3], [0,0], [0,1], [1,1]]; // P, +, -, W
 
     constructor(size: number = 4, mode: string = "static") {
         this.size = size;
         this.mode = mode;
+        this.positions = new Array(4);
+        this.init();
+    }
+
+    init = () => {
         switch(this.mode) {
             case "player":
                 this.positions = this.defaultPositions;
@@ -23,10 +28,11 @@ class GridWorld {
             default:
                 this.positions = this.defaultPositions;
         }
-        this.reward = 0;
+        this.actions = [];
     }
 
-    move = (direction: string): number => {
+    move = (direction: string) => {
+        this.actions.push(direction);
         const newPosition = {...this.positions[0]};
 
         switch(direction) {
@@ -39,18 +45,13 @@ class GridWorld {
         if(this.isInsideWorld(newPosition) && !this.isWall(newPosition))  {
             this.positions[0] = newPosition;
         }
-        return this.updateReward();
+        return this.state();
     }
 
-    updateReward = (): number => {
-        if(this.isGoal(this.positions[0])) {
-            this.reward = 10;
-        } else if(this.isPit(this.positions[0])) {
-            this.reward = -10;
-        } else {
-            this.reward = -1; // Step
-        }
-        return this.reward; 
+    calculateReward = (): number => {
+        if(this.isGoal(this.positions[0])) return 10;
+        if(this.isPit(this.positions[0])) return -10;
+        return -1; // Step
     }
 
     randomPosition = () => {
@@ -106,6 +107,26 @@ class GridWorld {
         state[2][this.positions[2][0]][this.positions[2][1]] = 1;
         state[3][this.positions[3][0]][this.positions[3][1]] = 1;
         return state;
+    }
+
+    print = () => {
+        let state = Array(this.size).fill(null)
+            .map(() => Array(this.size).fill("o"));
+
+        state[this.positions[0][0]][this.positions[0][1]] = "A";
+        state[this.positions[1][0]][this.positions[1][1]] = "+";
+        state[this.positions[2][0]][this.positions[2][1]] = "-";
+        state[this.positions[3][0]][this.positions[3][1]] = "W";
+
+        let s = new String();
+
+        for(let i = 0; i < this.size; i++) {
+            for(let j = 0; j < this.size; j++) {
+                s += state[i][j];
+            } 
+            s += "\n"
+        }
+        console.log(s + ", actions: " + this.actions.join() + ", reward: " + this.calculateReward() + ", [GridWorld]");
     }
 }
 

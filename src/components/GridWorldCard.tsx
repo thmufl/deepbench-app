@@ -2,6 +2,7 @@
 import React from "react";
 import Card from "react-bootstrap/Card";
 import GridWorldControl from "./GridWorldControl";
+import GridWorld from "../gym/GridWorld";
 
 const GridWorldCard = () => {
 
@@ -17,7 +18,8 @@ const GridWorldCard = () => {
           <GridWorldControl
             width = { 520 }
             height = { 520}
-            epochs = { 500 }
+            world = { new GridWorld(4, "random") }
+            epochs = { 5000 }
           />
           <Card.Link href="#">Card Link</Card.Link>
         </Card.Body>
