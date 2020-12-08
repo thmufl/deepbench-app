@@ -1,15 +1,10 @@
 // eslint-disable-next-line
-import React, { useState, useEffect, useRef, Fragment } from "react";
+import React, { useState, Fragment } from "react";
 import Form from "react-bootstrap/Form";
 import Button from "react-bootstrap/Button";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
 import {
-  FaPlusSquare,
-  FaMinusSquare,
-  FaStop,
-  FaPause,
-  FaPlay,
   FaExpand,
   FaCompress,
 } from "react-icons/fa";

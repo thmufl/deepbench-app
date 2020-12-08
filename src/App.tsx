@@ -12,6 +12,7 @@ import SideNav from "./components/SideNav";
 import Home from "./components/Home";
 import GradientDescentCard from "./components/GradientDescentControl";
 import CurvesCard from "./components/CurvesCard";
+import GridWorldCard from "./components/GridWorldCard";
 import ColorCircleCard from "./components/ColorCircleCard";
 import AtRandomAnimationCard from "./components/AtRandomAnimationCard";
 import LSTMTest from "./components/LSTMTest";
@@ -26,6 +27,7 @@ function App() {
               { title: "Home", path: "/home" },
               { title: "Gradient Descent", path: "/gradient-descent" },
               { title: "Curves", path: "/curves" },
+              { title: "Grid World", path: "/gridworld" },
               { title: "Color Circle", path: "/color-circle" },
               { title: "At Random", path: "/random" },
               { title: "Learning OR", path: "/or" },
@@ -39,6 +41,7 @@ function App() {
             <Route path="/home" component={Home} />
             <Route path="/gradient-descent" component={GradientDescentCard} />
             <Route path="/curves" component={CurvesCard} />
+            <Route path="/gridworld" component={GridWorldCard} />
             <Route path="/color-circle" component={ColorCircleCard} />
             <Route path="/random" component={AtRandomAnimationCard} />
             <Route path="/lstm" component={LSTMTest} />
