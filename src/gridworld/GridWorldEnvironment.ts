@@ -123,6 +123,17 @@ class GridWorldEnvironment {
         return state;
     }
 
+    // getState = () => {
+    //     let state = Array(this.size).fill(null)
+    //         .map(() => Array(this.size).fill(0));
+  
+    //     state[this.positions.agent.x][this.positions.agent.y] = 1
+    //     state[this.positions.goal.x][this.positions.goal.y] = 2
+    //     state[this.positions.pit.x][this.positions.pit.y] = 3
+    //     state[this.positions.wall.x][this.positions.wall.y] = 4
+    //     return state;
+    // }
+
     reset = () => {
         this.positions = {
             agent: new Position(-1, -1),
