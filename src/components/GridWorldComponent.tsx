@@ -12,10 +12,11 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
     const svgRef = useRef<SVGSVGElement | null>(null)
 
     const colors = {
-        background: "lightgrey",
+        background: "#1e1e1e", // "lightgrey"
+        text: "grey",
         agent: "magenta",
         goal: "yellow",
-        pit: "cyan",
+        pit: "lightblue", // "#008B8B", // dark cyan
         wall: "dimgrey"
     }
 
@@ -30,7 +31,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
 
     const handleTrain = (event: React.MouseEvent) => {
         event.preventDefault()
-        agent.train(6000)
+        agent.train(200)
     }
 
     const handleReset = (event: React.MouseEvent) => {
@@ -42,6 +43,11 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
     const handlePlay = (event: React.MouseEvent) => {
         event.preventDefault()
         agent.play()
+    }
+
+    const handleLoop = (event: React.MouseEvent) => {
+        event.preventDefault()
+        agent.loop()
     }
 
     const handleSaveModel = async (event: React.MouseEvent) => {
@@ -56,10 +62,15 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
         console.log(`Loaded model ${MODEL_URL}`)
     };
 
+    const handleBenchmark = async (event: React.MouseEvent) => {
+        event.preventDefault()
+        await agent.benchmark()
+    };
+
     useEffect(() => {
-        const {width, height} = state
-        const stepX = width / environment.size
-        const stepY = height / environment.size
+        const { width, height } = state
+        const stepX = width / environment.sizeY
+        const stepY = height / environment.sizeX
         const codes = ["A", "+", "-", "W"]
 
         if(svgRef.current) {
@@ -91,7 +102,8 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 .style("opacity", (_, i) => {
                     switch(codes[i]) {
                         case "A": return 0.9
-                        case "-": return 0.7
+                        case "+": return 0.8
+                        case "-": return 0.8
                         case "W": return 0.7
                         default: return 0.7
                     }
@@ -106,32 +118,49 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 .style("fill", "white")
                 .style("font-family", "monospace")
                 .style("font-size", "20px")
-                .style("font-weight", 800)
+                .style("font-weight", 600)
 
             positionsAll.merge(positionsEnter)
-                .attr("transform", d => "translate(" + d.y * stepX + " " + d.x * stepY + ")")                    
+                .attr("transform", d => "translate(" + d.y * stepX + " " + d.x * stepY + ")")                  
             
             positionsAll.exit()
                 .remove()
 
-            let last50 = environment.history.length - 50
-            let pos = environment.history.filter((x, i) => i > last50 && x === 10).length
-            let neg = environment.history.filter((x, i) => i > last50 && x === -10).length
+            let pos = environment.history.filter(x => x === 10).length
+            let neg = environment.history.filter(x => x === -10).length
+            let loss = environment.loss
 
-            const stats = "pos/neg: " + (pos/neg).toFixed(3) + ", epsilon: " + agent.epsilon.toFixed(3)
+            const stats = `episode: ${agent.currentEpisode}, pos: ${pos}, neg: ${neg}, epsilon: ${agent.epsilon.toFixed(3)}, loss: ${loss.toFixed(3)}`
             const statsAll = svg.selectAll<SVGTextElement, number>(".stats")
                 .data([stats])
 
             const statsEnter = statsAll.enter()
                 .append("text")
                 .attr("class", "stats")
-                .attr("transform", "translate(" + (4 * stepY - 260) + " 20)")
-                .attr("text-anchor", "start")
-                .style("font-size", "14px")
+                .attr("transform", "translate(" + (width - 15) + " 18)")
+                .style("text-anchor", "end")
+                .style("fill", colors.text)
+                .style("font-size", "10px")
                 .style("font-family", "monospace")
-                .style("font-weight", 800)
+                .style("font-weight", 600)
                     
             statsAll.merge(statsEnter).text(d => d)
+
+            const title = "Grid World: Q-Learning - 9-Jan-2021 - thmf@me.com"
+            const titleAll = svg.selectAll<SVGTextElement, number>(".title")
+                .data([title])
+
+            const titleEnter = titleAll.enter()
+                .append("text")
+                .attr("class", "title")
+                .attr("transform", "translate(" + (width - 15) + " " + (height - 8) + ")")
+                .style("text-anchor", "end")
+                .style("fill", colors.text)
+                .style("font-size", "10px")
+                .style("font-family", "monospace")
+                .style("font-weight", 600)
+                    
+            titleAll.merge(titleEnter).text(d => d)
         }
     }, [svgRef, environment, agent, colors]);
 
@@ -145,31 +174,42 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 preserveAspectRatio="xMinYMin meet"
                 ref={svgRef}
             />
+            <br />
             <Button
                 variant="secondary"
-                className="ml-2"
+                className="ml-2 mt-2"
                 onClick={handleLoadModel}
             >Load</Button>
             <Button
                 variant="secondary"
-                className="ml-2"
+                className="ml-2 mt-2"
                 onClick={handleTrain}
             >Train</Button>
             <Button
                 variant="secondary"
-                className="ml-2"
+                className="ml-2 mt-2"
                 onClick={handlePlay}
             >Play</Button>
             <Button
                 variant="secondary"
-                className="ml-2"
+                className="ml-2 mt-2"
                 onClick={handleReset}
             >Reset</Button>
             <Button
                 variant="secondary"
-                className="ml-2"
+                className="ml-2 mt-2"
+                onClick={handleLoop}
+            >Loop</Button>
+            <Button
+                variant="secondary"
+                className="ml-2 mt-2"
                 onClick={handleSaveModel}
             >Save</Button>
+            <Button
+                variant="secondary"
+                className="ml-2 mt-2"
+                onClick={handleBenchmark}
+            >Benchmark</Button>
         </>
     );
 };

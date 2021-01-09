@@ -1,3 +1,5 @@
+import * as tf from "@tensorflow/tfjs"
+
 export class Position {
     x: number
     y: number
@@ -34,20 +36,30 @@ export type GridWorldCallbacks = {
 class GridWorldEnvironment {
 
     DEFALUT_POSITIONS = {
-        agent: new Position(0, 3),
-        goal: new Position(0, 0),
-        pit: new Position(0, 1),
-        wall: new Position(1, 1)
+        agent: new Position(1, 5),
+        goal: new Position(1, 0),
+        pit: new Position(2, 1),
+        wall: new Position(1,1)
     }
 
-    size: number
+    TRAINING_POSITIONS = [
+        { agent: new Position(1, 5), goal: new Position(1, 0), pit: new Position(2, 1), wall: new Position(1, 1) },
+        { agent: new Position(5, 5), goal: new Position(1, 0), pit: new Position(2, 1), wall: new Position(1, 1) },
+        { agent: new Position(3, 2), goal: new Position(4, 8), pit: new Position(4, 7), wall: new Position(2, 7) },
+        { agent: new Position(4, 6), goal: new Position(2, 5), pit: new Position(3, 2), wall: new Position(3, 5) }
+    ]
+
+    sizeX: number
+    sizeY: number
     mode: string
     callbacks: GridWorldCallbacks = {}
     positions = this.DEFALUT_POSITIONS
     history: number[] = []
+    loss: number = 0
 
-    constructor(size: number = 4, mode: string = "agent", callbacks?: GridWorldCallbacks) {
-        this.size = size
+    constructor(sizeX: number = 4, sizeY: number = 5, mode: string = "agent", callbacks?: GridWorldCallbacks) {
+        this.sizeX = sizeX
+        this.sizeY = sizeY
         this.mode = mode
         if(callbacks) this.callbacks = callbacks
         this.reset()
@@ -55,8 +67,8 @@ class GridWorldEnvironment {
 
     randomPosition = () => {
         return new Position(
-            Math.floor(Math.random() * this.size),
-            Math.floor(Math.random() * this.size)
+            Math.floor(Math.random() * this.sizeX),
+            Math.floor(Math.random() * this.sizeY)
         );
     }
 
@@ -76,8 +88,8 @@ class GridWorldEnvironment {
     }
 
     isInsideGrid = (position: Position) => { 
-        return  position.x > -1 && position.x < this.size && 
-                position.y > -1 && position.y < this.size
+        return  position.x > -1 && position.x < this.sizeX && 
+                position.y > -1 && position.y < this.sizeY
     }
 
     isGoal = (position: Position) => position.equals(this.positions.goal)
@@ -113,26 +125,27 @@ class GridWorldEnvironment {
 
     getState = () => {
         let state = Array(4).fill(null)
-            .map(() => Array(this.size).fill(null)
-            .map(() => Array(this.size).fill(0)));
+            .map(() => Array(this.sizeX).fill(null)
+            .map(() => Array(this.sizeY).fill(0)));
   
         state[0][this.positions.agent.x][this.positions.agent.y] = 1
         state[1][this.positions.goal.x][this.positions.goal.y] = 1
         state[2][this.positions.pit.x][this.positions.pit.y] = 1
         state[3][this.positions.wall.x][this.positions.wall.y] = 1
+        //console.log("state:", state)
         return state;
     }
 
-    // getState = () => {
-    //     let state = Array(this.size).fill(null)
-    //         .map(() => Array(this.size).fill(0));
-  
-    //     state[this.positions.agent.x][this.positions.agent.y] = 1
-    //     state[this.positions.goal.x][this.positions.goal.y] = 2
-    //     state[this.positions.pit.x][this.positions.pit.y] = 3
-    //     state[this.positions.wall.x][this.positions.wall.y] = 4
-    //     return state;
-    // }
+    getStateTensor = () => {
+        const buffer = tf.buffer([1, this.sizeX, this.sizeY, 2])
+
+        buffer.set(1.0, 0, this.positions.agent.x, this.positions.agent.y, 0)
+        buffer.set(1.0, 0, this.positions.goal.x, this.positions.goal.y, 1)
+        buffer.set(1.5, 0, this.positions.pit.x, this.positions.pit.y, 1)
+        buffer.set(2.0, 0, this.positions.wall.x, this.positions.wall.y, 1)
+        //buffer.toTensor().print()
+        return buffer.toTensor();
+    } 
 
     reset = () => {
         this.positions = {
@@ -152,14 +165,18 @@ class GridWorldEnvironment {
                 this.positions.agent.x = -1
                 this.positions.agent.y = -1
                 this.positions.agent = this.findAvailablePosition();
-                break;
+                break
 
             case "random":
                 this.positions.wall = this.findAvailablePosition()
                 this.positions.goal = this.findAvailablePosition()
                 this.positions.pit = this.findAvailablePosition()
                 this.positions.agent = this.findAvailablePosition()
-                break;
+                break
+
+            case "training":
+                this.positions = {...this.TRAINING_POSITIONS[Math.floor(Math.random() * this.TRAINING_POSITIONS.length)]}
+                break
                 
             default: throw Error("No such mode: " + this.mode);
         }
@@ -169,7 +186,7 @@ class GridWorldEnvironment {
     }
 
     print = () => {
-        const grid = new Array(this.size).fill("O").map(() => new Array(this.size).fill("\u00B7"))
+        const grid = new Array(this.sizeX).fill("O").map(() => new Array(this.sizeY).fill("\u00B7"))
         grid[this.positions.agent.x][this.positions.agent.y] = "A"
         grid[this.positions.goal.x][this.positions.goal.y] = "G"
         grid[this.positions.pit.x][this.positions.pit.y] = "P"

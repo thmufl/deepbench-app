@@ -8,7 +8,7 @@ import GridWorldComponent from "./GridWorldComponent"
 
 const GridWorldCard = () => {
 
-    const environment = new GridWorldEnvironment(4, "random")
+    const environment = new GridWorldEnvironment(6, 9, "training")
     const agent = new GridWorldAgent(environment)
 
     return (
@@ -26,7 +26,7 @@ const GridWorldCard = () => {
             <br /><b>P</b> Player, <b>+</b> Goal, <b>-</b> Pit, <b>W</b> Wall
             </Card.Text>
 
-            <GridWorldComponent agent={agent} width={520} height={520} />
+            <GridWorldComponent agent={agent} width={1920/2.2} height={1080/2.2} />
 
             <br />
             <Card.Link href="#">Card Link</Card.Link>
