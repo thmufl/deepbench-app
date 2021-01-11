@@ -1,4 +1,5 @@
 import * as tf from "@tensorflow/tfjs"
+import { isDoStatement } from "typescript";
 
 export class Position {
     x: number
@@ -52,17 +53,19 @@ class GridWorldEnvironment {
     sizeX: number
     sizeY: number
     mode: string
+    maxSteps: number
     callbacks: GridWorldCallbacks = {}
     positions = this.DEFALUT_POSITIONS
-    history: number[] = []
-    loss: number = 0
+    
+    currentStep: number = 0
+    wasOutsideGrid = false
 
-    constructor(sizeX: number = 4, sizeY: number = 5, mode: string = "agent", callbacks?: GridWorldCallbacks) {
+    constructor(sizeX: number, sizeY: number, mode: string = "agent", maxSteps?: number, callbacks?: GridWorldCallbacks) {
         this.sizeX = sizeX
         this.sizeY = sizeY
         this.mode = mode
+        this.maxSteps = maxSteps || sizeX * sizeY * 3
         if(callbacks) this.callbacks = callbacks
-        this.reset()
     }
 
     randomPosition = () => {
@@ -98,7 +101,7 @@ class GridWorldEnvironment {
 
     makeStep = (direction: string) => {
         if(this.callbacks.onBeforeMakeStep) this.callbacks.onBeforeMakeStep({state: this.getState(), reward: this.getReward()})
-
+        this.wasOutsideGrid = false
         const agentPosition =  new Position(this.positions.agent.x, this.positions.agent.y)
         switch(direction) {
             case "up": agentPosition.x -= 1; break
@@ -108,18 +111,25 @@ class GridWorldEnvironment {
             default: throw Error(`Invalid direction: ${direction}`)
         }
         if(this.isInsideGrid(agentPosition) && !this.isWall(agentPosition)) this.positions.agent = agentPosition
-        const state = {state: this.getState(), reward: this.getReward()}
-        if(state.reward !== -1) this.history.push(state.reward);
+        if(!this.isInsideGrid(agentPosition)) this.wasOutsideGrid = true
+
+        const state = this.getState()
 
         if(this.callbacks.onGoal && this.isGoal(agentPosition)) this.callbacks.onGoal(state)
         if(this.callbacks.onPit && this.isPit(agentPosition)) this.callbacks.onPit(state)
+        this.currentStep++
         if(this.callbacks.onAfterMakeStep) this.callbacks.onAfterMakeStep(state)
-        return state
+        return { state, done: this.isDone(), reward: this.getReward(), steps: this.currentStep }
+    }
+
+    isDone = () => {
+        return this.getReward() === 10 || this.getReward() === -10 || this.currentStep > this.maxSteps
     }
 
     getReward = () => {
         if(this.isGoal(this.positions.agent)) return 10
         if(this.isPit(this.positions.agent)) return -10
+        if(this.wasOutsideGrid) return -5
         return -1; // Step
     }
 
@@ -154,6 +164,7 @@ class GridWorldEnvironment {
             pit: new Position(-1, -1),
             wall: new Position(-1, -1)
         }
+        this.currentStep = 0
 
         switch(this.mode) {
             case "static":

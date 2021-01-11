@@ -25,7 +25,7 @@ class GridWorldAgent {
             tf.layers.conv2d({ filters: 64, kernelSize: [2, 2], strides: 1, activation: "relu" }),
             tf.layers.flatten(),
             tf.layers.dense({ units: 100, activation: "relu" }),
-            tf.layers.dropout({ rate: 0.1 }),
+            tf.layers.dropout({ rate: 0.2 }),
             tf.layers.dense({ units: 50, activation: "relu" }),
             tf.layers.dropout({ rate: 0.1 }),
             tf.layers.dense({ units: 4, activation: "relu" }),
@@ -33,7 +33,7 @@ class GridWorldAgent {
     })
 
     static DEFAULT_MODEL_COMPILE_ARGS: tf.ModelCompileArgs = {
-        optimizer: tf.train.adam(1e-5),
+        optimizer: tf.train.adam(2e-4),
         loss: "meanSquaredError",
         metrics: ["mse"],
     }
@@ -41,11 +41,12 @@ class GridWorldAgent {
     environment: GridWorldEnvironment
     model: tf.Sequential
     modelCompileArgs: tf.ModelCompileArgs
-    currentEpisode: number
+    currentEpisode: number = 0
     gamma: number
     epsilon: number
-    maxSteps: number
     replayMemory: { xs: number[][][][], ys: number[][] }
+    startTime = Date.now()
+    history: any[] = []
     trace = false
 
     TARGET_URL = "localstorage://gridworld-model-target"
@@ -54,39 +55,33 @@ class GridWorldAgent {
     constructor(
         environment: GridWorldEnvironment,
         gamma?: number,
-        maxSteps?: number,
         model?: tf.Sequential,
         modelCompileArgs?: tf.ModelCompileArgs) {
         this.environment = environment
-        this.currentEpisode = -1
         this.gamma = gamma || 0.9
         this.epsilon = 1.0
-        this.maxSteps = maxSteps || 200
         this.model = model || GridWorldAgent.DEFAULT_MODEL
         this.modelCompileArgs = modelCompileArgs || GridWorldAgent.DEFAULT_MODEL_COMPILE_ARGS
         this.model.compile(this.modelCompileArgs)
         this.replayMemory = { xs: Array<number[][][]>(), ys: Array<number[]>() }
     }
 
-    train = async(episodes: number) => {
-        console.log(`Training model for ${episodes} episodes. Model summary:`)
+    train = async(numEpisodes: number) => {
+        console.log(`Training model for ${numEpisodes} episodes. Model summary:`)
         this.model.summary()
-        const startTime = Date.now()
         await this.model.save(this.TARGET_URL)
         const targetModel = await tf.loadLayersModel(this.TARGET_URL) as tf.Sequential
         this.epsilon = 1.0
 
-        for(let episode = 0; episode < episodes; episode++) { 
-            this.currentEpisode = episode
-            let status = 1
-            let step = 0
+        for(this.currentEpisode = 0; this.currentEpisode < numEpisodes; this.currentEpisode++) {
+            this.environment.reset()
             let xs: number[][][]
             let ys: number[]
-            let trainingData = { xs: Array<number[][][]>(), ys: Array<number[]>() }
-                        
-            while(status === 1 && step < this.maxSteps) {
+            let trainingData = { xs: Array<number[][][]>(), ys: Array<number[]>() }                    
+
+            while(!this.environment.isDone()) {
                 tf.tidy(() => {
-                    if(step % 7 === 0) {
+                    if(this.environment.currentStep !== 0 && this.environment.currentStep % 9 === 0) {
                         targetModel.setWeights(this.model.getWeights().map(w => w.clone()))
                     }
                     const state0 = this.environment.getStateTensor() //.reshape([1, 96]).add(tf.randomNormal([96]).div(100))
@@ -99,13 +94,13 @@ class GridWorldAgent {
                         action = prediction0.argMax(-1).dataSync()[0]
                     }
 
-                    if(this.trace && episode % 10 === 0) {
+                    if(this.trace && this.currentEpisode % 10 === 0) {
                         console.log("\n\nprediction0 (action=" + GridWorldAgent.DIRECTIONS[action] + ")")
                         this.environment.print()
                         prediction0.print()
                     }
 
-                    const {state, reward} = this.environment.makeStep(GridWorldAgent.DIRECTIONS[action])
+                    const { state, done, reward, steps } = this.environment.makeStep(GridWorldAgent.DIRECTIONS[action])
                     const state1 = this.environment.getStateTensor()  //.reshape([1, 96]).add(tf.randomNormal([96]).div(100))
                     const prediction1 = (targetModel.predict(state1) as tf.Tensor).reshape([4])
                     const maxQ = tf.max(prediction1, -1).dataSync()[0]
@@ -113,15 +108,15 @@ class GridWorldAgent {
                     const qval = prediction0.arraySync() as number[]
                     qval[action] = reward + this.gamma * maxQ
 
-                    if(this.trace && episode % 5 === 0) {
+                    if(this.trace && this.currentEpisode % 5 === 0) {
                         console.log("prediction1 (reward=" + reward + ", maxQ=" + maxQ + ")" )
                         this.environment.print()
                         prediction1.print()
                     }
                   
-                    if(reward !== -1 && reward !== 5) {
+                    if(done) {
                         qval[action] = reward
-                        status = 0
+                        this.history.push({ reward, steps, timeStamp: Date.now() })
                     }
 
                     xs = state0.reshape([6, 9, 2]).arraySync() as number[][][]
@@ -158,30 +153,30 @@ class GridWorldAgent {
                     let y = tf.tensor(trainingData.ys)
 
                     await this.model.trainOnBatch(x, y).then((info) => {
-                        if(step % 10 === 0) this.environment.loss = (info as number[])[0]
-                        if(episode % 10 === 0 && step === 0) {
-                            let last200 = this.environment.history.length - 200
-                            let pos = this.environment.history.filter((x, i) => i > last200 && x === 10).length
-                            let neg = this.environment.history.filter((x, i) => i > last200 && x === -10).length
+                        if(this.currentEpisode % 10 === 0 && this.environment.currentStep < 2) {
+                            let last100 = this.history.length - 100
+                            let pos = this.history.filter((x, i) => i > last100 && x.reward === 10).length
+                            let neg = this.history.filter((x, i) => i > last100 && x.reward === -10).length
+                            let msPerEpisode = this.history.length < 100 ?
+                                (this.history[this.history.length-1].timeStamp - this.history[0].timeStamp) / this.history.length :
+                                (this.history[this.history.length-1].timeStamp - this.history[this.history.length-100].timeStamp) / 100
 
                             console.log(
-                                "Episode: " + episode + 
+                                "Episode: " + this.currentEpisode + 
                                 ", pos/neg: " + (pos / neg || 1).toFixed(3) +
                                 ", epsilon: " + this.epsilon.toFixed(3) +
                                 ", loss: " + (info as number[])[0].toFixed(4) +
                                 ", tensors: " + tf.memory().numTensors +
-                                ", ms/episode: " + (((Date.now() - startTime)) / episode).toFixed(2))
+                                ", ms/episode: " + msPerEpisode.toFixed(2))
                         }
                     });
                     x.dispose()
                     y.dispose()
                 }
-                step++
             }
-            if(this.epsilon > 0.1) this.epsilon -= 1 / episodes
-            this.environment.reset();
+            if(this.epsilon > 0.1) this.epsilon -= 1 / numEpisodes
         }
-        console.log(`Training done. ${episodes} episodes in ${((Date.now() - startTime) / 1000 / 60).toFixed(2)} minutes.`)
+        console.log(`Training done. ${numEpisodes} episodes in  minutes.`)
     }
 
     save = async(url: string) => {
@@ -194,17 +189,16 @@ class GridWorldAgent {
     }
 
     play = () => {
+        this.environment.maxSteps = 15
         tf.tidy(() => {
-            let step = 0
             const id = setInterval(() => {
                 let state = this.environment.getStateTensor()
                 let qval = this.model.predict(state) as tf.Tensor
                 let action = tf.argMax(qval.reshape([4])).dataSync()[0]
-                console.log(step + ": " + GridWorldAgent.DIRECTIONS[action])
+                console.log(this.environment.currentStep + ": " + GridWorldAgent.DIRECTIONS[action])
                 this.environment.makeStep(GridWorldAgent.DIRECTIONS[action])
                 let reward = this.environment.getReward()
-                step++
-                if(reward === 10 || reward === -10 || step >= 15) {
+                if(this.environment.isDone()) {
                     console.log(reward === 10 ? "WON" : "LOST")
                     clearInterval(id)
                     return
@@ -215,7 +209,7 @@ class GridWorldAgent {
 
     loop = () => {
         this.epsilon = 0
-        this.environment.history.splice(0)
+        this.history.splice(0)
         this.currentEpisode = 0
         const id = setInterval(() => {
             this.environment.reset()

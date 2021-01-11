@@ -31,7 +31,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
 
     const handleTrain = (event: React.MouseEvent) => {
         event.preventDefault()
-        agent.train(200)
+        agent.train(500)
     }
 
     const handleReset = (event: React.MouseEvent) => {
@@ -126,11 +126,11 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
             positionsAll.exit()
                 .remove()
 
-            let pos = environment.history.filter(x => x === 10).length
-            let neg = environment.history.filter(x => x === -10).length
-            let loss = environment.loss
+            let last100 = agent.history.length - 100
+            let pos = agent.history.filter((x, i) => i > last100 && x.reward === 10).length
+            let neg = agent.history.filter((x, i) => i > last100 && x.reward === -10).length
 
-            const stats = `episode: ${agent.currentEpisode}, pos: ${pos}, neg: ${neg}, epsilon: ${agent.epsilon.toFixed(3)}, loss: ${loss.toFixed(3)}`
+            const stats = `episode: ${agent.currentEpisode}, step: ${("00" + environment.currentStep).slice(-3)}, pos/neg: ${pos}/${neg}, epsilon: ${agent.epsilon.toFixed(3)}`
             const statsAll = svg.selectAll<SVGTextElement, number>(".stats")
                 .data([stats])
 
@@ -146,7 +146,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                     
             statsAll.merge(statsEnter).text(d => d)
 
-            const title = "Grid World: Q-Learning - 9-Jan-2021 - thmf@me.com"
+            const title = "Grid World: Q-Learning - 11-Jan-2021 - thmf@me.com"
             const titleAll = svg.selectAll<SVGTextElement, number>(".title")
                 .data([title])
 
