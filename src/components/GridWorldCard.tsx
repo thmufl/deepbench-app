@@ -26,7 +26,7 @@ const GridWorldCard = () => {
             <br /><b>P</b> Player, <b>+</b> Goal, <b>-</b> Pit, <b>W</b> Wall
             </Card.Text>
 
-            <GridWorldComponent agent={agent} width={1920/2.2} height={1080/2.2} />
+            <GridWorldComponent agent={agent} width={1920/3.7} height={1080/3.7} />
 
             <br />
             <Card.Link href="#">Card Link</Card.Link>

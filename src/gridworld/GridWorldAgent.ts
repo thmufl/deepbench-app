@@ -28,12 +28,12 @@ class GridWorldAgent {
             tf.layers.dropout({ rate: 0.2 }),
             tf.layers.dense({ units: 50, activation: "relu" }),
             tf.layers.dropout({ rate: 0.1 }),
-            tf.layers.dense({ units: 4, activation: "relu" }),
+            tf.layers.dense({ units: 4, activation: "softmax" }),
         ],
     })
 
     static DEFAULT_MODEL_COMPILE_ARGS: tf.ModelCompileArgs = {
-        optimizer: tf.train.adam(2e-4),
+        optimizer: tf.train.adam(1e-2),
         loss: "meanSquaredError",
         metrics: ["mse"],
     }
@@ -45,7 +45,7 @@ class GridWorldAgent {
     gamma: number
     epsilon: number
     replayMemory: { xs: number[][][][], ys: number[][] }
-    startTime = Date.now()
+    startTime: number = 0
     history: any[] = []
     trace = false
 
@@ -57,6 +57,9 @@ class GridWorldAgent {
         gamma?: number,
         model?: tf.Sequential,
         modelCompileArgs?: tf.ModelCompileArgs) {
+
+        //tf.setBackend('cpu');
+        
         this.environment = environment
         this.gamma = gamma || 0.9
         this.epsilon = 1.0
@@ -67,8 +70,10 @@ class GridWorldAgent {
     }
 
     train = async(numEpisodes: number) => {
+        console.log(`Backend: ${tf.getBackend()}\nWEBGL_RENDER_FLOAT32_CAPABLE: ${tf.ENV.getBool("WEBGL_RENDER_FLOAT32_CAPABLE")}\nWEBGL_RENDER_FLOAT32_ENABLED: ${tf.ENV.getBool("WEBGL_RENDER_FLOAT32_ENABLED")}\nfloatPrecision: ${tf.backend().floatPrecision()}`);
         console.log(`Training model for ${numEpisodes} episodes. Model summary:`)
         this.model.summary()
+        this.startTime = Date.now()
         await this.model.save(this.TARGET_URL)
         const targetModel = await tf.loadLayersModel(this.TARGET_URL) as tf.Sequential
         this.epsilon = 1.0
@@ -81,7 +86,7 @@ class GridWorldAgent {
 
             while(!this.environment.isDone()) {
                 tf.tidy(() => {
-                    if(this.environment.currentStep !== 0 && this.environment.currentStep % 9 === 0) {
+                    if(this.environment.currentStep % 10 === 0) {
                         targetModel.setWeights(this.model.getWeights().map(w => w.clone()))
                     }
                     const state0 = this.environment.getStateTensor() //.reshape([1, 96]).add(tf.randomNormal([96]).div(100))
@@ -153,7 +158,8 @@ class GridWorldAgent {
                     let y = tf.tensor(trainingData.ys)
 
                     await this.model.trainOnBatch(x, y).then((info) => {
-                        if(this.currentEpisode % 10 === 0 && this.environment.currentStep < 2) {
+                        this.history[this.history.length-1].loss = (info as number[])[0]
+                        if(this.currentEpisode % 10 === 0 && this.environment.currentStep === 1) {
                             let last100 = this.history.length - 100
                             let pos = this.history.filter((x, i) => i > last100 && x.reward === 10).length
                             let neg = this.history.filter((x, i) => i > last100 && x.reward === -10).length
@@ -161,13 +167,7 @@ class GridWorldAgent {
                                 (this.history[this.history.length-1].timeStamp - this.history[0].timeStamp) / this.history.length :
                                 (this.history[this.history.length-1].timeStamp - this.history[this.history.length-100].timeStamp) / 100
 
-                            console.log(
-                                "Episode: " + this.currentEpisode + 
-                                ", pos/neg: " + (pos / neg || 1).toFixed(3) +
-                                ", epsilon: " + this.epsilon.toFixed(3) +
-                                ", loss: " + (info as number[])[0].toFixed(4) +
-                                ", tensors: " + tf.memory().numTensors +
-                                ", ms/episode: " + msPerEpisode.toFixed(2))
+                            console.log(`episode: ${this.currentEpisode}, pos/neg: ${(pos/(neg+1)).toFixed(4)}, epsilon: ${this.epsilon.toFixed(4)}, loss: ${(info as number[])[0].toFixed(4)}, tensors: ${tf.memory().numTensors}, ms/episode: ${msPerEpisode.toFixed(2)}`)
                         }
                     });
                     x.dispose()
@@ -176,7 +176,7 @@ class GridWorldAgent {
             }
             if(this.epsilon > 0.1) this.epsilon -= 1 / numEpisodes
         }
-        console.log(`Training done. ${numEpisodes} episodes in  minutes.`)
+        console.log(`Training done. ${numEpisodes} episodes in  ${((Date.now() - this.startTime) / 1000 / 60).toFixed(2)} minutes.`)
     }
 
     save = async(url: string) => {

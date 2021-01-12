@@ -1,5 +1,4 @@
 import * as tf from "@tensorflow/tfjs"
-import { isDoStatement } from "typescript";
 
 export class Position {
     x: number
@@ -47,7 +46,11 @@ class GridWorldEnvironment {
         { agent: new Position(1, 5), goal: new Position(1, 0), pit: new Position(2, 1), wall: new Position(1, 1) },
         { agent: new Position(5, 5), goal: new Position(1, 0), pit: new Position(2, 1), wall: new Position(1, 1) },
         { agent: new Position(3, 2), goal: new Position(4, 8), pit: new Position(4, 7), wall: new Position(2, 7) },
-        { agent: new Position(4, 6), goal: new Position(2, 5), pit: new Position(3, 2), wall: new Position(3, 5) }
+        { agent: new Position(4, 6), goal: new Position(2, 5), pit: new Position(3, 2), wall: new Position(3, 5) },
+        { agent: new Position(3, 6), goal: new Position(3, 4), pit: new Position(1, 3), wall: new Position(3, 5) },
+        { agent: new Position(3, 5), goal: new Position(3, 0), pit: new Position(4, 1), wall: new Position(3, 1) },
+        { agent: new Position(2, 7), goal: new Position(2, 2), pit: new Position(3, 3), wall: new Position(2, 3) },
+        { agent: new Position(4, 8), goal: new Position(4, 3), pit: new Position(5, 4), wall: new Position(4, 4) },
     ]
 
     sizeX: number
@@ -64,7 +67,7 @@ class GridWorldEnvironment {
         this.sizeX = sizeX
         this.sizeY = sizeY
         this.mode = mode
-        this.maxSteps = maxSteps || sizeX * sizeY * 3
+        this.maxSteps = maxSteps || sizeX * sizeY * 4
         if(callbacks) this.callbacks = callbacks
     }
 
@@ -142,17 +145,16 @@ class GridWorldEnvironment {
         state[1][this.positions.goal.x][this.positions.goal.y] = 1
         state[2][this.positions.pit.x][this.positions.pit.y] = 1
         state[3][this.positions.wall.x][this.positions.wall.y] = 1
-        //console.log("state:", state)
         return state;
     }
 
     getStateTensor = () => {
         const buffer = tf.buffer([1, this.sizeX, this.sizeY, 2])
 
-        buffer.set(1.0, 0, this.positions.agent.x, this.positions.agent.y, 0)
-        buffer.set(1.0, 0, this.positions.goal.x, this.positions.goal.y, 1)
+        buffer.set(1, 0, this.positions.agent.x, this.positions.agent.y, 0)
+        buffer.set(1, 0, this.positions.goal.x, this.positions.goal.y, 1)
         buffer.set(1.5, 0, this.positions.pit.x, this.positions.pit.y, 1)
-        buffer.set(2.0, 0, this.positions.wall.x, this.positions.wall.y, 1)
+        buffer.set(2, 0, this.positions.wall.x, this.positions.wall.y, 1)
         //buffer.toTensor().print()
         return buffer.toTensor();
     } 
@@ -165,6 +167,7 @@ class GridWorldEnvironment {
             wall: new Position(-1, -1)
         }
         this.currentStep = 0
+        this.wasOutsideGrid = false
 
         switch(this.mode) {
             case "static":

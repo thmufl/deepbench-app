@@ -31,7 +31,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
 
     const handleTrain = (event: React.MouseEvent) => {
         event.preventDefault()
-        agent.train(500)
+        agent.train(1000)
     }
 
     const handleReset = (event: React.MouseEvent) => {
@@ -117,7 +117,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 .text((_, i) => codes[i])
                 .style("fill", "white")
                 .style("font-family", "monospace")
-                .style("font-size", "20px")
+                .style("font-size", "14px")
                 .style("font-weight", 600)
 
             positionsAll.merge(positionsEnter)
@@ -126,25 +126,28 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
             positionsAll.exit()
                 .remove()
 
-            let last100 = agent.history.length - 100
-            let pos = agent.history.filter((x, i) => i > last100 && x.reward === 10).length
-            let neg = agent.history.filter((x, i) => i > last100 && x.reward === -10).length
+            if(environment.currentStep % 5 === 0) {
+                let last100 = agent.history.length - 100
+                let pos = agent.history.filter(x => x.reward === 10).length
+                let neg = agent.history.filter(x => x.reward === -10).length
+                let loss = agent.history.length > 0 && agent.history[agent.history.length-1].loss ? agent.history[agent.history.length-1].loss : 0
 
-            const stats = `episode: ${agent.currentEpisode}, step: ${("00" + environment.currentStep).slice(-3)}, pos/neg: ${pos}/${neg}, epsilon: ${agent.epsilon.toFixed(3)}`
-            const statsAll = svg.selectAll<SVGTextElement, number>(".stats")
-                .data([stats])
+                const stats = `episode: ${agent.currentEpisode}, step: ${("00" + environment.currentStep).slice(-3)}, pos/neg: ${pos}/${neg}, epsilon: ${agent.epsilon.toFixed(3)}, loss: ${loss.toFixed(4)}`
+                const statsAll = svg.selectAll<SVGTextElement, number>(".stats")
+                    .data([stats])
 
-            const statsEnter = statsAll.enter()
-                .append("text")
-                .attr("class", "stats")
-                .attr("transform", "translate(" + (width - 15) + " 18)")
-                .style("text-anchor", "end")
-                .style("fill", colors.text)
-                .style("font-size", "10px")
-                .style("font-family", "monospace")
-                .style("font-weight", 600)
-                    
-            statsAll.merge(statsEnter).text(d => d)
+                const statsEnter = statsAll.enter()
+                    .append("text")
+                    .attr("class", "stats")
+                    .attr("transform", "translate(" + (width - 15) + " 15)")
+                    .style("text-anchor", "end")
+                    .style("fill", colors.text)
+                    .style("font-size", "10px")
+                    .style("font-family", "monospace")
+                    .style("font-weight", 600)
+                        
+                statsAll.merge(statsEnter).text(d => d)
+            }
 
             const title = "Grid World: Q-Learning - 11-Jan-2021 - thmf@me.com"
             const titleAll = svg.selectAll<SVGTextElement, number>(".title")
