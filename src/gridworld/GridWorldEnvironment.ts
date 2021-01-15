@@ -1,4 +1,5 @@
 import * as tf from "@tensorflow/tfjs"
+import { step } from "@tensorflow/tfjs";
 
 export class Position {
     x: number
@@ -67,7 +68,7 @@ class GridWorldEnvironment {
         this.sizeX = sizeX
         this.sizeY = sizeY
         this.mode = mode
-        this.maxSteps = maxSteps || sizeX * sizeY * 4
+        this.maxSteps = Math.round(maxSteps || sizeX * sizeY * 3)
         if(callbacks) this.callbacks = callbacks
     }
 
@@ -125,6 +126,27 @@ class GridWorldEnvironment {
         return { state, done: this.isDone(), reward: this.getReward(), steps: this.currentStep }
     }
 
+    getRandomAction = () => {
+        const directions = ["up", "down", "left", "right"]
+        let validStep = false
+        let direction = "none"
+        const agentPosition = new Position(this.positions.agent.x, this.positions.agent.y)
+        while(!validStep) {
+            agentPosition.x = this.positions.agent.x
+            agentPosition.y = this.positions.agent.y
+            direction = directions[Math.floor(Math.random() * 4)]
+            switch(direction) {
+                case "up": agentPosition.x -= 1; break
+                case "down": agentPosition.x += 1; break
+                case "left": agentPosition.y -= 1; break
+                case "right": agentPosition.y += 1; break
+                default: throw Error(`Invalid direction: ${direction}`)
+            }
+            if(this.isInsideGrid(agentPosition) && !this.isWall(agentPosition)) validStep = true
+        }
+        return directions.indexOf(direction)
+    }
+
     isDone = () => {
         return this.getReward() === 10 || this.getReward() === -10 || this.currentStep > this.maxSteps
     }
@@ -132,7 +154,7 @@ class GridWorldEnvironment {
     getReward = () => {
         if(this.isGoal(this.positions.agent)) return 10
         if(this.isPit(this.positions.agent)) return -10
-        if(this.wasOutsideGrid) return -5
+        if(this.wasOutsideGrid) return -10
         return -1; // Step
     }
 
@@ -151,10 +173,10 @@ class GridWorldEnvironment {
     getStateTensor = () => {
         const buffer = tf.buffer([1, this.sizeX, this.sizeY, 2])
 
-        buffer.set(1, 0, this.positions.agent.x, this.positions.agent.y, 0)
-        buffer.set(1, 0, this.positions.goal.x, this.positions.goal.y, 1)
-        buffer.set(1.5, 0, this.positions.pit.x, this.positions.pit.y, 1)
-        buffer.set(2, 0, this.positions.wall.x, this.positions.wall.y, 1)
+        buffer.set(1.0, 0, this.positions.agent.x, this.positions.agent.y, 0)
+        buffer.set(0.9, 0, this.positions.goal.x, this.positions.goal.y, 1)
+        buffer.set(0.6, 0, this.positions.pit.x, this.positions.pit.y, 1)
+        buffer.set(0.3, 0, this.positions.wall.x, this.positions.wall.y, 1)
         //buffer.toTensor().print()
         return buffer.toTensor();
     } 

@@ -1,21 +1,22 @@
 // eslint-disable-next-line
-import React from "react";
-import { Route, Switch, Redirect } from "react-router-dom";
+import React from "react"
+import { Route, Switch, Redirect } from "react-router-dom"
 
-import Container from "react-bootstrap/Container";
-import Row from "react-bootstrap/Row";
-import Col from "react-bootstrap/Col";
+import Container from "react-bootstrap/Container"
+import Row from "react-bootstrap/Row"
+import Col from "react-bootstrap/Col"
 
 import "./App.css";
 
-import SideNav from "./components/SideNav";
-import Home from "./components/Home";
-import GradientDescentCard from "./components/GradientDescentControl";
-import CurvesCard from "./components/CurvesCard";
-import GridWorldCard from "./components/GridWorldCard";
-import ColorCircleCard from "./components/ColorCircleCard";
-import AtRandomAnimationCard from "./components/AtRandomAnimationCard";
-import LSTMTest from "./components/LSTMTest";
+import SideNav from "./components/SideNav"
+import Home from "./components/Home"
+import GradientDescentCard from "./components/GradientDescentControl"
+import CurvesCard from "./components/CurvesCard"
+import GridWorldCard from "./components/GridWorldCard"
+import CryptoWorldCard from "./components/CryproWorldCard"
+import ColorCircleCard from "./components/ColorCircleCard"
+import AtRandomAnimationCard from "./components/AtRandomAnimationCard"
+import LSTMTest from "./components/LSTMTest"
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
               { title: "Gradient Descent", path: "/gradient-descent" },
               { title: "Curves", path: "/curves" },
               { title: "Grid World", path: "/gridworld" },
+              { title: "Crypto World", path: "/cryptoworld" },
               { title: "Color Circle", path: "/color-circle" },
               { title: "At Random", path: "/random" },
               { title: "Learning OR", path: "/or" },
@@ -42,6 +44,7 @@ function App() {
             <Route path="/gradient-descent" component={GradientDescentCard} />
             <Route path="/curves" component={CurvesCard} />
             <Route path="/gridworld" component={GridWorldCard} />
+            <Route path="/cryptoworld" component={CryptoWorldCard} />
             <Route path="/color-circle" component={ColorCircleCard} />
             <Route path="/random" component={AtRandomAnimationCard} />
             <Route path="/lstm" component={LSTMTest} />

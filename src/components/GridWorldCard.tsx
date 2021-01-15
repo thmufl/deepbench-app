@@ -8,7 +8,7 @@ import GridWorldComponent from "./GridWorldComponent"
 
 const GridWorldCard = () => {
 
-    const environment = new GridWorldEnvironment(6, 9, "training")
+    const environment = new GridWorldEnvironment(6, 9, "random")
     const agent = new GridWorldAgent(environment)
 
     return (
@@ -33,6 +33,6 @@ const GridWorldCard = () => {
             </Card.Body>
             <Card.Footer>Footer</Card.Footer>
         </Card>
-    );
-};
-export default GridWorldCard;
+    )
+}
+export default GridWorldCard

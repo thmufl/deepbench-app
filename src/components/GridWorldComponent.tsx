@@ -12,11 +12,11 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
     const svgRef = useRef<SVGSVGElement | null>(null)
 
     const colors = {
-        background: "#1e1e1e", // "lightgrey"
-        text: "grey",
+        background: "#1e1e1e",
+        text: "white",
         agent: "magenta",
         goal: "yellow",
-        pit: "lightblue", // "#008B8B", // dark cyan
+        pit: "darkgrey", // "#008B8B", // dark cyan
         wall: "dimgrey"
     }
 
@@ -31,7 +31,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
 
     const handleTrain = (event: React.MouseEvent) => {
         event.preventDefault()
-        agent.train(1000)
+        agent.train(2000)
     }
 
     const handleReset = (event: React.MouseEvent) => {
@@ -101,10 +101,10 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 })    
                 .style("opacity", (_, i) => {
                     switch(codes[i]) {
-                        case "A": return 0.9
+                        case "A": return 0.8
                         case "+": return 0.8
                         case "-": return 0.8
-                        case "W": return 0.7
+                        case "W": return 0.8
                         default: return 0.7
                     }
                 })
@@ -132,7 +132,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 let neg = agent.history.filter(x => x.reward === -10).length
                 let loss = agent.history.length > 0 && agent.history[agent.history.length-1].loss ? agent.history[agent.history.length-1].loss : 0
 
-                const stats = `episode: ${agent.currentEpisode}, step: ${("00" + environment.currentStep).slice(-3)}, pos/neg: ${pos}/${neg}, epsilon: ${agent.epsilon.toFixed(3)}, loss: ${loss.toFixed(4)}`
+                const stats = `episode: ${agent.currentEpisode}/${agent.numEpisodes}, step: ${("00" + environment.currentStep).slice(-3)}, pos/neg: ${pos}/${neg}, epsilon: ${agent.epsilon.toFixed(3)}, loss: ${loss.toFixed(4)}`
                 const statsAll = svg.selectAll<SVGTextElement, number>(".stats")
                     .data([stats])
 
@@ -142,14 +142,14 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                     .attr("transform", "translate(" + (width - 15) + " 15)")
                     .style("text-anchor", "end")
                     .style("fill", colors.text)
-                    .style("font-size", "10px")
+                    .style("font-size", "11px")
                     .style("font-family", "monospace")
                     .style("font-weight", 600)
                         
                 statsAll.merge(statsEnter).text(d => d)
             }
 
-            const title = "Grid World: Q-Learning - 11-Jan-2021 - thmf@me.com"
+            const title = "Grid World Q-Learning - 15-Jan-2021 - thmf@me.com"
             const titleAll = svg.selectAll<SVGTextElement, number>(".title")
                 .data([title])
 
@@ -159,7 +159,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 .attr("transform", "translate(" + (width - 15) + " " + (height - 8) + ")")
                 .style("text-anchor", "end")
                 .style("fill", colors.text)
-                .style("font-size", "10px")
+                .style("font-size", "11px")
                 .style("font-family", "monospace")
                 .style("font-weight", 600)
                     
