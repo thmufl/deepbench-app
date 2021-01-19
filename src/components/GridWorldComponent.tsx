@@ -15,7 +15,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
         background: "#1e1e1e",
         text: "white",
         agent: "magenta",
-        goal: "yellow",
+        goal: "greenyellow",
         pit: "darkgrey", // "#008B8B", // dark cyan
         wall: "dimgrey"
     }
@@ -31,7 +31,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
 
     const handleTrain = (event: React.MouseEvent) => {
         event.preventDefault()
-        agent.train(2000)
+        agent.train(3000)
     }
 
     const handleReset = (event: React.MouseEvent) => {
@@ -127,12 +127,11 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 .remove()
 
             if(environment.currentStep % 5 === 0) {
-                let last100 = agent.history.length - 100
                 let pos = agent.history.filter(x => x.reward === 10).length
                 let neg = agent.history.filter(x => x.reward === -10).length
                 let loss = agent.history.length > 0 && agent.history[agent.history.length-1].loss ? agent.history[agent.history.length-1].loss : 0
 
-                const stats = `episode: ${agent.currentEpisode}/${agent.numEpisodes}, step: ${("00" + environment.currentStep).slice(-3)}, pos/neg: ${pos}/${neg}, epsilon: ${agent.epsilon.toFixed(3)}, loss: ${loss.toFixed(4)}`
+                const stats = `${agent.currentEpisode}/${agent.numEpisodes} ${("00" + environment.currentStep).slice(-3)} ${((Date.now()-agent.startTime)/1000/60).toFixed(1)}, pos/neg: ${pos}/${neg} (${(pos/neg).toFixed(3)}), epsilon: ${agent.epsilon.toFixed(3)}, loss: ${loss.toFixed(4)}`
                 const statsAll = svg.selectAll<SVGTextElement, number>(".stats")
                     .data([stats])
 
@@ -149,7 +148,7 @@ const GridWorldComponent = (props: {agent: GridWorldAgent, width: number, height
                 statsAll.merge(statsEnter).text(d => d)
             }
 
-            const title = "Grid World Q-Learning - 15-Jan-2021 - thmf@me.com"
+            const title = "Grid World Q-Learning - 18-Jan-2021 - thmf@me.com"
             const titleAll = svg.selectAll<SVGTextElement, number>(".title")
                 .data([title])
 

@@ -3,10 +3,13 @@ import React from "react"
 import Card from "react-bootstrap/Card"
 
 import CryptoWorldEnvironment from "../cryptoworld/CryptoWorldEnvironment"
+import CryptoWorldAgent from "../cryptoworld/CryptoWorldAgent"
+import CryptoWorldComponent from "./CryptoWorldComponent"
 
 const CryptoWorldCard = () => {
 
-    const environment = new CryptoWorldEnvironment(0, [6], [9])
+    const environment = new CryptoWorldEnvironment({day: 0, eur: 1000, btc: 0}, 0.025)
+    const agent = new CryptoWorldAgent(environment)
 
     return (
         <Card style={{ width: "auto" }}>
@@ -19,7 +22,7 @@ const CryptoWorldCard = () => {
             <Card.Text>
             Lorem ipsum dolor
             </Card.Text>
-
+            <CryptoWorldComponent agent={agent} width={1920/3.7} height={1080/3.7} />
             <br />
             <Card.Link href="#">Card Link</Card.Link>
             </Card.Body>

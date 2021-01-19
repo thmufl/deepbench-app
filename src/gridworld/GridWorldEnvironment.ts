@@ -1,5 +1,4 @@
 import * as tf from "@tensorflow/tfjs"
-import { step } from "@tensorflow/tfjs";
 
 export class Position {
     x: number
@@ -154,7 +153,7 @@ class GridWorldEnvironment {
     getReward = () => {
         if(this.isGoal(this.positions.agent)) return 10
         if(this.isPit(this.positions.agent)) return -10
-        if(this.wasOutsideGrid) return -10
+        // if(this.wasOutsideGrid) return -10
         return -1; // Step
     }
 
@@ -171,12 +170,11 @@ class GridWorldEnvironment {
     }
 
     getStateTensor = () => {
-        const buffer = tf.buffer([1, this.sizeX, this.sizeY, 2])
-
-        buffer.set(1.0, 0, this.positions.agent.x, this.positions.agent.y, 0)
+        const buffer = tf.buffer([1, this.sizeX, this.sizeY, 4], "float32")
+        buffer.set(0.9, 0, this.positions.agent.x, this.positions.agent.y, 0)
         buffer.set(0.9, 0, this.positions.goal.x, this.positions.goal.y, 1)
-        buffer.set(0.6, 0, this.positions.pit.x, this.positions.pit.y, 1)
-        buffer.set(0.3, 0, this.positions.wall.x, this.positions.wall.y, 1)
+        buffer.set(0.9, 0, this.positions.pit.x, this.positions.pit.y, 2)
+        buffer.set(0.9, 0, this.positions.wall.x, this.positions.wall.y, 3)
         //buffer.toTensor().print()
         return buffer.toTensor();
     } 

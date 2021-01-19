@@ -19,17 +19,27 @@ class GridWorldAgent {
 
   static DEFAULT_MODEL = tf.sequential({
     layers: [
-        tf.layers.conv2d({ inputShape: [6, 9, 2], kernelSize: [5, 5], filters: 32, padding: "same", strides: 1, activation: "relu", }),
-        tf.layers.maxPool2d({ poolSize: 3, strides: 2 }),
-        tf.layers.conv2d({ kernelSize: [3, 3], filters: 64, padding: "same", strides: 1, activation: "relu", }),
+        tf.layers.conv2d({ inputShape: [6, 9, 4], kernelSize: [5, 5], filters: 100, padding: "same", strides: 1, activation: "relu", }),
+        tf.layers.maxPool2d({ poolSize: 3, strides: 1 }),
+        tf.layers.conv2d({ kernelSize: [3, 3], filters: 50, strides: 1, activation: "relu", }),
         tf.layers.maxPool2d({ poolSize: 2, strides: 1 }),
         tf.layers.flatten(),
-        tf.layers.batchNormalization(),
-        tf.layers.dense({ units: 100, activation: "sigmoid" }),
-        tf.layers.dense({ units: 50, activation: "sigmoid" }),
+        tf.layers.dense({ units: 200, activation: "relu" }),
         tf.layers.dense({ units: 4, activation: "softmax" }),
     ],
   });
+
+  // static DEFAULT_MODEL = tf.sequential({
+  //   layers: [
+  //       tf.layers.conv2d({ inputShape: [6, 9, 2], kernelSize: [4, 4], filters: 64, padding: "same", strides: 2, activation: "relu", }),
+  //       tf.layers.maxPool2d({ poolSize: 3, strides: 1 }),
+  //       tf.layers.flatten(),
+  //       tf.layers.batchNormalization(),
+  //       tf.layers.dense({ units: 100, activation: "sigmoid" }),
+  //       tf.layers.dense({ units: 50, activation: "sigmoid" }),
+  //       tf.layers.dense({ units: 4, activation: "sigmoid" }),
+  //   ],
+  // });
 
   static DEFAULT_MODEL_COMPILE_ARGS: tf.ModelCompileArgs = {
     optimizer: tf.train.adam(1e-3),
@@ -45,7 +55,8 @@ class GridWorldAgent {
   gamma: number;
   epsilon: number;
   replayMemory: { xs: number[][][][]; ys: number[][] };
-  startTime: number = 0;
+  replayMemorySize = 400
+  startTime: number = Date.now();
   history: any[] = [];
   trace = true;
 
@@ -93,41 +104,40 @@ class GridWorldAgent {
 
       while (!this.environment.isDone()) {
         tf.tidy(() => {
-          if (this.environment.currentStep % 9 === 0) {
+          if (this.environment.currentStep % 4 === 0) {
             targetModel.setWeights(this.model.getWeights().map((w) => w.clone()))
           }
-          const state0 = this.environment.getStateTensor() //.add(tf.randomNormal([6, 9, 2]).div(100))
+          const state0 = this.environment.getStateTensor().add(tf.randomNormal([6, 9, 4]).div(100))
           const prediction0 = (targetModel.predict(state0) as tf.Tensor).reshape([4])
 
           let action: number
           if (Math.random() < this.epsilon) {
-            action = this.environment.getRandomAction() //(Math.floor(Math.random() * 4))
+            action = this.environment.getRandomAction()
           } else {
             action = prediction0.argMax().dataSync()[0]
           }
 
           const { state, done, reward, steps } = this.environment.makeStep(GridWorldAgent.DIRECTIONS[action]);
-          const state1 = this.environment.getStateTensor() //.add(tf.randomNormal([6, 9, 2]).div(100))
+          const state1 = this.environment.getStateTensor().add(tf.randomNormal([6, 9, 4]).div(100))
           const prediction1 = (targetModel.predict(state1) as tf.Tensor).reshape([4])
           const maxQ = tf.max(prediction1).dataSync()[0]
           const qval = prediction0.arraySync() as number[]
           qval[action] = reward + this.gamma * maxQ
 
-          if (
-            this.trace && (reward === 10 || reward === -10 || reward === -15 || maxQ > 0.8)) {
+          if (this.trace && this.environment.currentStep === Math.floor(Math.random() * 100)) {
             //this.currentEpisode % 10 === 0 && this.environment.currentStep % 5) {
-            console.log(`episode: ${this.currentEpisode}, step: ${this.environment.currentStep}, action: ${GridWorldAgent.DIRECTIONS[action]}, reward: ${reward}, maxQ: ${maxQ}`);
-            // prediction0.print()
-            // prediction1.print()
+            console.log(`episode: ${this.currentEpisode}, step: ${this.environment.currentStep}, action: ${GridWorldAgent.DIRECTIONS[action]}, reward: ${reward}, gamma * maxQ: ${this.gamma * maxQ}`);
+            prediction0.print()
+            prediction1.print()
             //this.environment.print()
           }
 
           if (done) {
             qval[action] = reward
-            this.history.push({ reward, steps, timeStamp: Date.now() })
+            this.history.push({ reward, steps, maxQ, qval, timeStamp: Date.now() })
           }
 
-          xs = state0.reshape([6, 9, 2]).arraySync() as number[][][]
+          xs = state0.reshape([6, 9, 4]).arraySync() as number[][][]
           ys = tf.tensor(qval).reshape([4]).arraySync() as number[]
 
           if (this.replayMemory.xs.length > 1000) {
@@ -137,10 +147,10 @@ class GridWorldAgent {
           this.replayMemory.xs.push(xs)
           this.replayMemory.ys.push(ys)
 
-          if (this.replayMemory.xs.length > 200) {
+          if (this.replayMemory.xs.length > this.replayMemorySize) {
             trainingData.xs = new Array<number[][][]>()
             trainingData.ys = new Array<number[]>()
-            for (let i = 0; i < 200; i++) {
+            for (let i = 0; i < this.replayMemorySize; i++) {
               let ri = Math.floor(Math.random() * this.replayMemory.xs.length)
               trainingData.xs.push(this.replayMemory.xs[ri])
               trainingData.ys.push(this.replayMemory.ys[ri])
@@ -156,25 +166,22 @@ class GridWorldAgent {
           }
         });
 
-        if (this.replayMemory.xs.length > 200) {
+        if (this.replayMemory.xs.length > this.replayMemorySize) {
           let x = tf.tensor(trainingData.xs)
           let y = tf.tensor(trainingData.ys)
 
           await this.model.trainOnBatch(x, y).then((info) => {
             this.history[this.history.length - 1].loss = (info as number[])[0]
-            if (
-              this.currentEpisode % 10 === 0 &&
-              this.environment.currentStep === 1
-            ) {
-              let last100 = this.history.length - 100
-              let pos = this.history.filter((x, i) => i > last100 && x.reward === 10).length
-              let neg = this.history.filter((x, i) => i > last100 && x.reward === -10).length
+            if (this.currentEpisode % 10 === 0 && this.environment.currentStep === 1) {
+              let last10 = this.history.length - 10
+              let pos = this.history.filter((x, i) => i > last10 && x.reward === 10).length
+              let neg = this.history.filter((x, i) => i > last10 && x.reward === -10).length
               let msPerEpisode =
-                this.history.length < 100
+                this.history.length < 10
                   ? (this.history[this.history.length - 1].timeStamp - this.history[0].timeStamp) / this.history.length
-                  : (this.history[this.history.length - 1].timeStamp - this.history[this.history.length - 100].timeStamp) / 100
-
-              console.log(`episode: ${this.currentEpisode}, pos/neg: ${(pos / (neg + 1)).toFixed(4)}, epsilon: ${this.epsilon.toFixed(4)}, loss: ${(info as number[])[0].toFixed(4)}, tensors: ${tf.memory().numTensors}, ms/episode: ${msPerEpisode.toFixed(2)}`)
+                  : (this.history[this.history.length - 1].timeStamp - this.history[this.history.length - 10].timeStamp) / 10
+              console.log(
+                `=== episode: ${this.currentEpisode}, pos/neg: ${(pos / (neg + 1)).toFixed(4)}, epsilon: ${this.epsilon.toFixed(4)}, loss: ${(info as number[])[0].toFixed(4)}, tensors: ${tf.memory().numTensors}, ms/episode: ${msPerEpisode.toFixed(2)}`)
             }
           });
           x.dispose()
