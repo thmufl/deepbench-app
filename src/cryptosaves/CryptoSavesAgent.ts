@@ -1,7 +1,7 @@
-import CryptoWorldEnvironment, { Position, Action } from "./CryptoWorldEnvironment";
+import CryptoSavesEnvironment, { Position, Action } from "./CryptoSavesEnvironment";
 import * as tf from "@tensorflow/tfjs";
 
-class CryptoWorldAgent {
+class CryptoSavesAgent {
 
   static DEFAULT_MODEL = tf.sequential({
     layers: [
@@ -15,13 +15,28 @@ class CryptoWorldAgent {
     ],
   });
 
+    // static DEFAULT_MODEL = tf.sequential({
+    //     layers: [
+    //         tf.layers.dense({ inputShape: [10], units: 150, activation: "relu", }),
+    //         //tf.layers.batchNormalization(),
+    //         tf.layers.dense({ units: 150, activation: "relu" }),
+    //         tf.layers.dropout({rate: 0.1}),
+    //         tf.layers.dense({ units: 300, activation: "relu" }),
+    //         tf.layers.dropout({rate: 0.1}),
+    //         tf.layers.dense({ units: 150, activation: "relu" }),
+    //         tf.layers.dropout({rate: 0.1}),
+    //         tf.layers.dense({ units: 150, activation: "relu" }),
+    //         tf.layers.dense({ units: 19, activation: "softmax" }),
+    //     ],
+    // });
+
     static DEFAULT_MODEL_COMPILE_ARGS: tf.ModelCompileArgs = {
         optimizer: tf.train.adam(1e-5),
         loss: "meanSquaredError",
         metrics: ["mse"],
     };
 
-    environment: CryptoWorldEnvironment;
+    environment: CryptoSavesEnvironment;
     model: tf.Sequential;
     modelCompileArgs: tf.ModelCompileArgs;
     numEpisodes: number = 2000;
@@ -35,10 +50,32 @@ class CryptoWorldAgent {
     history: any[] = []
     trace = false;
 
-    TARGET_URL = "localstorage://cryptoworld-model-target";
+    TARGET_URL = "localstorage://cryptosaves-model-target";
+
+    ACTIONS = [
+        { type: "HOLD", amount: 1.0 },
+        { type: "BUY", amount: 0.1 },
+        { type: "BUY", amount: 0.2 },
+        { type: "BUY", amount: 0.3 },
+        { type: "BUY", amount: 0.5 },
+        { type: "BUY", amount: 0.7 },
+        { type: "BUY", amount: 1.0 },
+        { type: "SELL", amount: 0.1 },
+        { type: "SELL", amount: 0.2 },
+        { type: "SELL", amount: 0.3 },
+        { type: "SELL", amount: 0.5 },
+        { type: "SELL", amount: 0.7 },
+        { type: "SELL", amount: 1.0 },
+        // { type: "SAVE", amount: 0.1 },
+        // { type: "SAVE", amount: 0.2 },
+        // { type: "SAVE", amount: 0.3 },
+        // { type: "SAVE", amount: 0.5 },
+        // { type: "SAVE", amount: 0.7 },
+        // { type: "SAVE", amount: 1.0 }
+    ]
 
   constructor(
-    environment: CryptoWorldEnvironment,
+    environment: CryptoSavesEnvironment,
     gamma?: number,
     model?: tf.Sequential,
     modelCompileArgs?: tf.ModelCompileArgs
@@ -46,8 +83,8 @@ class CryptoWorldAgent {
     this.environment = environment;
     this.gamma = gamma || 0.9;
     this.epsilon = 1.0;
-    this.model = model || CryptoWorldAgent.DEFAULT_MODEL;
-    this.modelCompileArgs = modelCompileArgs || CryptoWorldAgent.DEFAULT_MODEL_COMPILE_ARGS;
+    this.model = model || CryptoSavesAgent.DEFAULT_MODEL;
+    this.modelCompileArgs = modelCompileArgs || CryptoSavesAgent.DEFAULT_MODEL_COMPILE_ARGS;
     this.model.compile(this.modelCompileArgs);
     this.replayMemory = { xs: Array<number[]>(), ys: Array<number[]>() };
   }
@@ -85,15 +122,16 @@ class CryptoWorldAgent {
           const state0 = this.environment.getStateTensor()
           const prediction0 = (targetModel.predict(state0) as tf.Tensor2D).arraySync()[0]
 
-          let actionIndex = null
+          let action = null
           if (Math.random() < this.epsilon) {
-            actionIndex = this.environment.getRandomAction()
+            let type = Math.floor(Math.random() * 3)
+            action = (type === 0) ? 0 : 1 + Math.floor(Math.random() * this.ACTIONS.length-1)
           } else {
-            actionIndex = prediction0.indexOf(Math.max(...prediction0))
-            // let pos = this.history.slice(-1)[0]
-            // if(this.currentEpisode % 50 === 0) console.log("episode: " + this.currentEpisode + ", day: " + pos.day  + ", date: " + pos.date + ", action: " + this.environment.ACTIONS[actionIndex].type + " " + this.environment.ACTIONS[actionIndex].amount)
+            action = prediction0.indexOf(Math.max(...prediction0))
+            let pos = this.history.slice(-1)[0]
+            if(this.currentEpisode % 50 === 0) console.log("episode: " + this.currentEpisode + ", day: " + pos.day  + ", date: " + pos.date + ", action: " + this.ACTIONS[action].type + " " + this.ACTIONS[action].amount)
           }
-          const {done, reward, state} = this.environment.makeStep(this.environment.ACTIONS[actionIndex])
+          const {done, reward, state} = this.environment.makeStep(this.ACTIONS[action])
           this.history.push(state)
 
           const state1 = this.environment.getStateTensor()
@@ -101,9 +139,9 @@ class CryptoWorldAgent {
           const maxQ = Math.max(...prediction1)
           const qval = prediction0
           
-          qval[actionIndex] = reward + this.gamma * maxQ
+          qval[action] = reward + this.gamma * maxQ
           if (done) {
-            qval[actionIndex] = reward
+            qval[action] = reward
           }
 
           xs = state0.arraySync()[0]// Array.from(state0.dataSync())
@@ -142,7 +180,7 @@ class CryptoWorldAgent {
             if (this.currentEpisode % 10 === 0 && this.environment.currentPosition.day === this.environment.historicalData.length-1) {
                 let loss = (info as number[])[0]
                 let pos = this.environment.currentPosition
-                console.log(`episode: ${this.currentEpisode}, date: ${pos.date}, epsilon: ${this.epsilon.toFixed(3)}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(8)}, eurValue: ${pos.value.toFixed(2)}, ms/episode: ${((Date.now() - this.startTime) / this.currentEpisode).toFixed(2)}, loss: ${loss.toFixed(4)}`)
+                console.log(`episode: ${this.currentEpisode}, date: ${pos.date}, epsilon: ${this.epsilon.toFixed(3)}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(8)}, saves: ${pos.saves.toFixed(2)}, eurValue: ${pos.value.toFixed(2)}, ms/episode: ${((Date.now() - this.startTime) / this.currentEpisode).toFixed(2)}, loss: ${loss.toFixed(4)}`)
             }
           });
           x.dispose()
@@ -153,7 +191,7 @@ class CryptoWorldAgent {
     }
     let pos = this.environment.currentPosition
     console.log(`Training done. ${numEpisodes} episodes in ${((Date.now() - this.startTime) / 1000 / 60).toFixed(2)} minutes.`)
-    console.log(`Positions on day ${pos.day}: EUR ${pos.eur.toFixed(2)}, BTC ${pos.btc.toFixed(8)}, eurValue: ${pos.value.toFixed(2)}`)
+    console.log(`Positions on day ${pos.day}: EUR ${pos.eur.toFixed(2)}, BTC ${pos.btc.toFixed(8)}, SAVES (EUR) ${pos.saves.toFixed(2)}, eurValue: ${pos.value.toFixed(2)}`)
   };
 
   predict = async () => {
@@ -165,8 +203,8 @@ class CryptoWorldAgent {
       const prediction = await this.model.predict(this.environment.getStateTensor()) as tf.Tensor
       let action = prediction.argMax(-1).arraySync() as number
       let pos = this.environment.currentPosition
-      console.log(`day ${day}: ${this.environment.ACTIONS[action].type} ${this.environment.ACTIONS[action].amount}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(8)}, eurValue: ${pos.value.toFixed(2)}`)
-      this.environment.makeStep(this.environment.ACTIONS[action])
+      console.log(`day ${day}: ${this.ACTIONS[action].type} ${this.ACTIONS[action].amount}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(8)}, saves: ${pos.saves.toFixed(2)}, eurValue: ${pos.value.toFixed(2)}`)
+      this.environment.makeStep(this.ACTIONS[action])
     }
     this.history.push(this.environment.getState())
   }
@@ -181,4 +219,4 @@ class CryptoWorldAgent {
   };
 }
 
-export default CryptoWorldAgent
+export default CryptoSavesAgent

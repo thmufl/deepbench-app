@@ -14,6 +14,7 @@ import GradientDescentCard from "./components/GradientDescentControl"
 import CurvesCard from "./components/CurvesCard"
 import GridWorldCard from "./components/GridWorldCard"
 import CryptoWorldCard from "./components/CryproWorldCard"
+import CryptoSavesCard from "./components/CryproSavesCard"
 import ColorCircleCard from "./components/ColorCircleCard"
 import AtRandomAnimationCard from "./components/AtRandomAnimationCard"
 import LSTMTest from "./components/LSTMTest"
@@ -30,6 +31,7 @@ function App() {
               { title: "Curves", path: "/curves" },
               { title: "Grid World", path: "/gridworld" },
               { title: "Crypto World", path: "/cryptoworld" },
+              { title: "Crypto Saves", path: "/cryptosaves" },
               { title: "Color Circle", path: "/color-circle" },
               { title: "At Random", path: "/random" },
               { title: "Learning OR", path: "/or" },
@@ -45,6 +47,7 @@ function App() {
             <Route path="/curves" component={CurvesCard} />
             <Route path="/gridworld" component={GridWorldCard} />
             <Route path="/cryptoworld" component={CryptoWorldCard} />
+            <Route path="/cryptosaves" component={CryptoSavesCard} />
             <Route path="/color-circle" component={ColorCircleCard} />
             <Route path="/random" component={AtRandomAnimationCard} />
             <Route path="/lstm" component={LSTMTest} />

@@ -3,10 +3,10 @@ import { Button } from "react-bootstrap"
 import * as d3 from "d3"
 
 
-import Position from "../cryptoworld/CryptoWorldEnvironment"
-import CryptoWorldAgent from "../cryptoworld/CryptoWorldAgent"
+import Position from "../cryptosaves/CryptoSavesEnvironment"
+import CryptoSavesAgent from "../cryptosaves/CryptoSavesAgent"
 
-const CryptoWorldComponent = (props: { agent: CryptoWorldAgent, width: number, height: number }) => {
+const CryptoSavesComponent = (props: { agent: CryptoSavesAgent, width: number, height: number }) => {
     const [state, setState] = useState(props)
     const {agent, width, height} = state
 
@@ -22,7 +22,7 @@ const CryptoWorldComponent = (props: { agent: CryptoWorldAgent, width: number, h
         wall: "dimgrey"
     }
 
-    const MODEL_URL = "localstorage://cryptoworld-model"
+    const MODEL_URL = "localstorage://cryptosaves-model"
 
     environment.callbacks = {
         onAfterMakeStep: () => setEnvironment({...environment}),
@@ -30,7 +30,7 @@ const CryptoWorldComponent = (props: { agent: CryptoWorldAgent, width: number, h
 
     const handleTrain = (event: React.MouseEvent) => {
         event.preventDefault()
-        agent.train(500)
+        agent.train(2000)
     }
 
     const handlePredict = (event: React.MouseEvent) => {
@@ -67,7 +67,7 @@ const CryptoWorldComponent = (props: { agent: CryptoWorldAgent, width: number, h
             const pricesEnter = pricesAll.enter()
                 .append("text")
                 .attr("class", "prices")
-                .attr("transform", (d, i) => "translate(" + (width - 150) + " " + (10 + i * 0.9 * height / (environment.historicalData.length + 1)) +")")
+                .attr("transform", (d, i) => "translate(" + (width - 170) + " " + (10 + i * 0.9 * height / (environment.historicalData.length + 1)) +")")
                 .style("text-anchor", "end")
                 .style("fill", colors.text)
                 .style("font-size", "4px")
@@ -90,19 +90,21 @@ const CryptoWorldComponent = (props: { agent: CryptoWorldAgent, width: number, h
                 .style("font-family", "monospace")
                 .style("font-weight", 200)
 
-            positionsEnter.append("tspan").attr("class", "eur").attr("x", -90)
-            positionsEnter.append("tspan").attr("class", "btc").attr("x", -65)
+            positionsEnter.append("tspan").attr("class", "eur").attr("x", -115)
+            positionsEnter.append("tspan").attr("class", "btc").attr("x", -90)
+            positionsEnter.append("tspan").attr("class", "saves").attr("x", -65)
             positionsEnter.append("tspan").attr("class", "value").attr("x", -40)
             positionsEnter.append("tspan").attr("class", "action-type").attr("x", -15)
             positionsEnter.append("tspan").attr("class", "action-amount").attr("x", 0)
                     
             positionsAll.merge(positionsEnter).select(".eur").text(d => d.eur.toFixed(2))
             positionsAll.merge(positionsEnter).select(".btc").text(d => d.btc.toFixed(5))
+            positionsAll.merge(positionsEnter).select(".saves").text(d => d.saves.toFixed(2))
             positionsAll.merge(positionsEnter).select(".value").text(d => d.value.toFixed(2))
             positionsAll.merge(positionsEnter).select(".action-type").text(d => d.action.type)
             positionsAll.merge(positionsEnter).select(".action-amount").text(d => d.action.amount.toFixed(2))
 
-            const title = "Crypto Saves Q-Learning - 26-Jan-2021 - thmf@me.com"
+            const title = "Crypto Saves Q-Learning - 25-Jan-2021 - thmf@me.com"
             const titleAll = svg.selectAll<SVGTextElement, number>(".title")
                 .data([title])
 
@@ -123,7 +125,7 @@ const CryptoWorldComponent = (props: { agent: CryptoWorldAgent, width: number, h
     return (
         <>
             <svg
-                className="cryptoworld-component"
+                className="cryptosaves-component"
                 width={width}
                 height={height}
                 viewBox={`0 0 ${width} ${height}`}
@@ -155,4 +157,4 @@ const CryptoWorldComponent = (props: { agent: CryptoWorldAgent, width: number, h
     );
 };
 
-export default CryptoWorldComponent;
+export default CryptoSavesComponent;
