@@ -1,5 +1,6 @@
 import * as tf from "@tensorflow/tfjs"
 import * as d3 from "d3"
+import DataRepository from "./DataRepository"
 
 export type CryptoWorldCallbacks = {
     onBeforeInit?: any
@@ -28,7 +29,8 @@ export type Position = {
 class CryptoWorldEnvironment {
     initialPosition: Position
     fees: number
-    historicalData: any[] = []
+    dataRepository: DataRepository
+    data: any[] = []
     callbacks: CryptoWorldCallbacks = {}
     previousPosition = {day: 0, date: "1970-01-01", eur: 0, btc: 0, open: 0, value: 0, action: {type: "HOLD", amount: 1.0}}
     currentPosition = {day: 0, date: "1970-01-01", eur: 0, btc: 0, open: 0, value: 0, action: {type: "HOLD", amount: 1.0}}
@@ -51,31 +53,17 @@ class CryptoWorldEnvironment {
         this.initialPosition = initialPosition
         this.fees = fees
         if(callbacks) this.callbacks = callbacks
+        this.dataRepository = new DataRepository("/assets/BTC-EUR-1Y.csv")
         this.init()
     }
 
     init = async() => {
         if(this.callbacks.onBeforeInit) this.callbacks.onBeforeInit()
-        this.historicalData = await d3.csv("/assets/BTC-EUR-03-06-2020.csv")
-        //this.historicalData = await d3.csv("/assets/BTC-EUR-YTD.csv")
-        for(let i = 0; i < this.historicalData.length; i++) {
-            if(this.historicalData[i].Open === "null" || this.historicalData[i].Open === "0.000000") this.historicalData[i].Open = this.historicalData[i-1].Close
-            if(this.historicalData[i].High === "null" || this.historicalData[i].High === "0.000000") this.historicalData[i].High = this.historicalData[i-1].Close
-            if(this.historicalData[i].Low === "null" || this.historicalData[i].Low === "0.000000") this.historicalData[i].Low = this.historicalData[i-1].Close
-            if(this.historicalData[i].Close === "null" || this.historicalData[i].Close === "0.000000") this.historicalData[i].Close = this.historicalData[i-1].Close
-            if(this.historicalData[i]["Adj Close"] === "null" || this.historicalData[i].Open === "0.000000") this.historicalData[i]["Adj Close"] = this.historicalData[i-1].Close
-            if(this.historicalData[i].Volume === "null" || this.historicalData[i].Volume === "0.000000") this.historicalData[i].Volume = this.historicalData[i-1].Volume
-        }
-        for(let i = 0; i < this.historicalData.length; i++) {
-            this.historicalData[i].Open = Math.round(parseFloat(this.historicalData[i].Open))
-            this.historicalData[i].High = Math.round(parseFloat(this.historicalData[i].High))
-            this.historicalData[i].Low = Math.round(parseFloat(this.historicalData[i].Low))
-            this.historicalData[i].Close = Math.round(parseFloat(this.historicalData[i].Close))
-            this.historicalData[i]["Adj Close"] = Math.round(parseFloat(this.historicalData[i]["Adj Close"]))
-            this.historicalData[i].Volume = parseInt(this.historicalData[i].Volume)
-        }
-        console.log("Historical Data", this.historicalData)
-        const open = this.historicalData[this.initialPosition.day].Open
+        await this.dataRepository.load()
+        console.log("DataRepository", this.dataRepository.data)
+        this.data = this.dataRepository.getData("2020-03-15", "2020-06-15")
+        console.log("Environment Data", this.data)
+        const open = this.data[this.initialPosition.day].Open
         this.initialPosition.open = open
         this.initialPosition.value = this.initialPosition.eur + open * this.initialPosition.btc
         this.reset()
@@ -87,8 +75,8 @@ class CryptoWorldEnvironment {
         
         this.currentPosition.action = action
         let day = this.currentPosition.day + 1
-        const open = this.historicalData[day].Open
-        const nextPosition = {...this.currentPosition, day, date: this.historicalData[day].Date, open, action: {type: "NULL", amount: 0}}
+        const open = this.data[day].Open
+        const nextPosition = {...this.currentPosition, day, date: this.data[day].Date, open, action: {type: "NULL", amount: 0}}
 
         let eur = 0
         let btc = 0
@@ -146,11 +134,11 @@ class CryptoWorldEnvironment {
         return action;
     }
 
-    isDone = () => this.currentPosition.day === this.historicalData.length - 1
+    isDone = () => this.currentPosition.day === this.data.length - 1
 
     getReward = () => {
-        const x = 10 * (this.currentPosition.value - this.previousPosition.value) / this.previousPosition.value
-        if (x === 0) return -10
+        const x = 100 * (this.currentPosition.value - this.previousPosition.value) / this.previousPosition.value
+        if (x === 0) return -1
         if (this.isDone()) return 5 * x
         return x
     }
@@ -163,7 +151,7 @@ class CryptoWorldEnvironment {
         // buffer.set(pos.eur, 0, 0)
         // buffer.set(pos.btc, 0, 1)
         // buffer.set(pos.value, 0, 2)
-        const data = this.historicalData[this.currentPosition.day]
+        const data = this.data[this.currentPosition.day]
         buffer.set(data.Open, 0, 0)
         buffer.set(data.High, 0, 1)
         buffer.set(data.Low, 0, 2)

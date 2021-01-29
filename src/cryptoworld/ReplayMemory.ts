@@ -1,5 +1,4 @@
 import * as tf from "@tensorflow/tfjs";
-import { cleanup } from "@testing-library/react";
 
 class ReplayMemory {
 

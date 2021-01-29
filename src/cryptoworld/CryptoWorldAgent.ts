@@ -50,7 +50,7 @@ class CryptoWorldAgent {
     this.model = model || CryptoWorldAgent.DEFAULT_MODEL;
     this.modelCompileArgs = modelCompileArgs || CryptoWorldAgent.DEFAULT_MODEL_COMPILE_ARGS;
     this.model.compile(this.modelCompileArgs);
-    this.history = new Array(this.environment.historicalData.length)
+    this.history = new Array(this.environment.data.length)
   }
 
   train = async (numEpisodes: number) => {
@@ -124,7 +124,7 @@ class CryptoWorldAgent {
         if(this.replayMemory.isBatchAvailable()) {
           const {xs, ys} = this.replayMemory.sample()
           await this.model.trainOnBatch(xs, ys).then((info) => {
-            if (this.currentEpisode % 10 === 0 && this.environment.currentPosition.day === this.environment.historicalData.length-1) {
+            if (this.currentEpisode % 10 === 0 && this.environment.currentPosition.day === this.environment.data.length-1) {
                 let loss = (info as number[])[0]
                 let pos = this.environment.currentPosition
                 console.log(`episode: ${this.currentEpisode}, date: ${pos.date}, epsilon: ${this.epsilon.toFixed(3)}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(4)}, value: ${pos.value.toFixed(2)}, ms/episode: ${((Date.now() - this.startTime) / this.currentEpisode).toFixed(2)}, tensors: ${tf.engine().memory().numTensors}, loss: ${loss.toFixed(4)}`)
@@ -143,7 +143,7 @@ class CryptoWorldAgent {
 
   predict = async () => {
     this.environment.reset()
-    this.history = new Array(this.environment.historicalData.length)
+    this.history = new Array(this.environment.data.length)
     this.history[0] = this.environment.getState()
     while(!this.environment.isDone()) {
       const day = this.environment.currentPosition.day
