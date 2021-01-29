@@ -1,41 +1,42 @@
 import CryptoWorldEnvironment, { Position, Action } from "./CryptoWorldEnvironment";
+import ReplayMemory from "./ReplayMemory";
 import * as tf from "@tensorflow/tfjs";
 
 class CryptoWorldAgent {
 
   static DEFAULT_MODEL = tf.sequential({
     layers: [
-        tf.layers.dense({ inputShape: [9], units: 150, activation: "relu", }),
+        tf.layers.dense({ inputShape: [6], units: 100, activation: "relu", }),
+        tf.layers.dense({ units: 150, activation: "relu" }),
+        tf.layers.dropout({rate: 0.1}),
         tf.layers.dense({ units: 200, activation: "relu" }),
         tf.layers.dropout({rate: 0.2}),
         tf.layers.dense({ units: 150, activation: "relu" }),
-        tf.layers.dropout({rate: 0.2}),
+        tf.layers.dropout({rate: 0.1}),
         tf.layers.dense({ units: 50, activation: "relu" }),
-        tf.layers.dense({ units: 13, activation: "relu" }),
+        tf.layers.dense({ units: 11, activation: "tanh" }),
     ],
   });
 
-    static DEFAULT_MODEL_COMPILE_ARGS: tf.ModelCompileArgs = {
-        optimizer: tf.train.adam(1e-5),
-        loss: "meanSquaredError",
-        metrics: ["mse"],
-    };
+  static DEFAULT_MODEL_COMPILE_ARGS: tf.ModelCompileArgs = {
+      optimizer: tf.train.adam(2e-5),
+      loss: "meanSquaredError",
+      metrics: ["mse"],
+  };
 
-    environment: CryptoWorldEnvironment;
-    model: tf.Sequential;
-    modelCompileArgs: tf.ModelCompileArgs;
-    numEpisodes: number = 2000;
-    currentEpisode: number = 0;
-    gamma: number;
-    epsilon: number;
-    replayMemory: { xs: number[][]; ys: number[][] };
-    replayMemorySize = 900
-    replayExamples = 300
-    startTime: number = Date.now();
-    history: any[] = []
-    trace = false;
+  environment: CryptoWorldEnvironment
+  model: tf.Sequential
+  modelCompileArgs: tf.ModelCompileArgs
+  numEpisodes: number = 2000
+  currentEpisode: number = 0
+  gamma: number
+  epsilon: number
+  replayMemory = new ReplayMemory(10000, 64)
+  startTime: number = Date.now()
+  history: any[] = []
+  trace = false
 
-    TARGET_URL = "localstorage://cryptoworld-model-target";
+  TARGET_URL = "localstorage://cryptoworld-model-target";
 
   constructor(
     environment: CryptoWorldEnvironment,
@@ -49,11 +50,12 @@ class CryptoWorldAgent {
     this.model = model || CryptoWorldAgent.DEFAULT_MODEL;
     this.modelCompileArgs = modelCompileArgs || CryptoWorldAgent.DEFAULT_MODEL_COMPILE_ARGS;
     this.model.compile(this.modelCompileArgs);
-    this.replayMemory = { xs: Array<number[]>(), ys: Array<number[]>() };
+    this.history = new Array(this.environment.historicalData.length)
   }
 
   train = async (numEpisodes: number) => {
     this.numEpisodes = numEpisodes;
+
     console.log(
       `Backend: ${tf.getBackend()}\nWEBGL_RENDER_FLOAT32_CAPABLE: ${tf.ENV.getBool(
         "WEBGL_RENDER_FLOAT32_CAPABLE"
@@ -61,8 +63,10 @@ class CryptoWorldAgent {
         "WEBGL_RENDER_FLOAT32_ENABLED"
       )}\nfloatPrecision: ${tf.backend().floatPrecision()}`
     );
-    console.log(`Training model for ${this.numEpisodes} episodes. Model summary:`)
+    console.log(`Training model for ${this.numEpisodes} episodes. Summary:`)
+    console.log(`Replay memory max size: ${this.replayMemory.maxSize}, batch size: ${this.replayMemory.batchSize}`)
     this.model.summary();
+
     this.startTime = Date.now();
     await this.model.save(this.TARGET_URL);
     const targetModel = (await tf.loadLayersModel(this.TARGET_URL)) as tf.Sequential;
@@ -70,14 +74,12 @@ class CryptoWorldAgent {
 
     for (this.currentEpisode = 0; this.currentEpisode < numEpisodes; this.currentEpisode++) {
       this.environment.reset();
-      let xs: number[];
-      let ys: number[];
-      let trainingData = { xs: Array<number[]>(), ys: Array<number[]>() }
-
-      this.history = [this.environment.getState()]
+      let x: number[];
+      let y: number[];
+      this.history[0] = this.environment.getState()
 
       while (!this.environment.isDone()) {
-        tf.tidy(() => {
+        let d = tf.tidy(() => {
           if (this.environment.currentPosition.day % 4 === 0) {
             targetModel.setWeights(this.model.getWeights().map((w) => w.clone()))
           }
@@ -87,14 +89,20 @@ class CryptoWorldAgent {
 
           let actionIndex = null
           if (Math.random() < this.epsilon) {
-            actionIndex = this.environment.getRandomAction()
+            let type = Math.floor(Math.random() * 3)
+            actionIndex = type === 0 ? 0 : 1 + Math.floor(Math.random() * this.environment.ACTIONS.length-1)
           } else {
             actionIndex = prediction0.indexOf(Math.max(...prediction0))
-            // let pos = this.history.slice(-1)[0]
-            // if(this.currentEpisode % 50 === 0) console.log("episode: " + this.currentEpisode + ", day: " + pos.day  + ", date: " + pos.date + ", action: " + this.environment.ACTIONS[actionIndex].type + " " + this.environment.ACTIONS[actionIndex].amount)
+            if(this.trace && this.currentEpisode % 10 === 0) {
+              console.log(`day: ${this.environment.currentPosition.day}, action: ${this.environment.ACTIONS[actionIndex].type},${this.environment.ACTIONS[actionIndex].amount}`)
+            }
           }
           const {done, reward, state} = this.environment.makeStep(this.environment.ACTIONS[actionIndex])
-          this.history.push(state)
+          if(this.trace && this.currentEpisode % 10 === 0) {
+            //console.log(`--- reward: ${reward} (done: ${done}), prediction0: ${JSON.stringify(prediction0)}`)
+            //console.log(`reward: ${reward} (done: ${done})`)
+          }
+          this.history[state.day] = state
 
           const state1 = this.environment.getStateTensor()
           const prediction1 = (targetModel.predict(state1) as tf.Tensor2D).arraySync()[0]
@@ -105,48 +113,25 @@ class CryptoWorldAgent {
           if (done) {
             qval[actionIndex] = reward
           }
+          x = state0.arraySync()[0]
+          y = qval
+          state0.dispose()
+          state1.dispose()
+          return {x, y}
+        })
+        this.replayMemory.push({x: d.x, y: d.y})
 
-          xs = state0.arraySync()[0]// Array.from(state0.dataSync())
-          ys = qval
-
-          if (this.replayMemory.xs.length > this.replayMemorySize) {
-            this.replayMemory.xs.splice(0, 1)
-            this.replayMemory.ys.splice(0, 1)
-          }
-          this.replayMemory.xs.push(xs)
-          this.replayMemory.ys.push(ys)
-
-          if (this.replayMemory.xs.length > this.replayExamples) {
-            trainingData.xs = new Array<number[]>()
-            trainingData.ys = new Array<number[]>()
-            for (let i = 0; i < this.replayMemorySize; i++) {
-              let j = Math.floor(Math.random() * this.replayMemory.xs.length)
-              trainingData.xs.push(this.replayMemory.xs[j])
-              trainingData.ys.push(this.replayMemory.ys[j])
-            }
-            trainingData.xs.push(xs)
-            trainingData.ys.push(ys)
-
-            state0.dispose()
-            //prediction0.dispose()
-            state1.dispose()
-            //prediction1.dispose()
-          }
-        });
-
-        if (this.replayMemory.xs.length > this.replayExamples) {
-          let x = tf.tensor2d(trainingData.xs)
-          let y = tf.tensor2d(trainingData.ys)
-
-          await this.model.trainOnBatch(x, y).then((info) => {
+        if(this.replayMemory.isBatchAvailable()) {
+          const {xs, ys} = this.replayMemory.sample()
+          await this.model.trainOnBatch(xs, ys).then((info) => {
             if (this.currentEpisode % 10 === 0 && this.environment.currentPosition.day === this.environment.historicalData.length-1) {
                 let loss = (info as number[])[0]
                 let pos = this.environment.currentPosition
-                console.log(`episode: ${this.currentEpisode}, date: ${pos.date}, epsilon: ${this.epsilon.toFixed(3)}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(8)}, eurValue: ${pos.value.toFixed(2)}, ms/episode: ${((Date.now() - this.startTime) / this.currentEpisode).toFixed(2)}, loss: ${loss.toFixed(4)}`)
-            }
+                console.log(`episode: ${this.currentEpisode}, date: ${pos.date}, epsilon: ${this.epsilon.toFixed(3)}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(4)}, value: ${pos.value.toFixed(2)}, ms/episode: ${((Date.now() - this.startTime) / this.currentEpisode).toFixed(2)}, tensors: ${tf.engine().memory().numTensors}, loss: ${loss.toFixed(4)}`)
+              }
           });
-          x.dispose()
-          y.dispose()
+          xs.dispose()
+          ys.dispose()
         }
       }
       if (this.epsilon > 0.1) this.epsilon -= 1 / numEpisodes
@@ -158,17 +143,21 @@ class CryptoWorldAgent {
 
   predict = async () => {
     this.environment.reset()
-    this.history = []
+    this.history = new Array(this.environment.historicalData.length)
+    this.history[0] = this.environment.getState()
     while(!this.environment.isDone()) {
-      this.history.push(this.environment.getState())
       const day = this.environment.currentPosition.day
-      const prediction = await this.model.predict(this.environment.getStateTensor()) as tf.Tensor
-      let action = prediction.argMax(-1).arraySync() as number
+      const state0 = this.environment.getStateTensor()
+      const prediction = (this.model.predict(state0) as tf.Tensor2D).arraySync()[0]
+      let actionIndex = prediction.indexOf(Math.max(...prediction))
+      let action = this.environment.ACTIONS[actionIndex]
+      const {done, reward, state} = this.environment.makeStep(action)
+      this.history[state.day] = state
+
       let pos = this.environment.currentPosition
-      console.log(`day ${day}: ${this.environment.ACTIONS[action].type} ${this.environment.ACTIONS[action].amount}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(8)}, eurValue: ${pos.value.toFixed(2)}`)
-      this.environment.makeStep(this.environment.ACTIONS[action])
+      console.log(`date: ${pos.date}, day ${day}: ${action.type} ${action.amount}, eur: ${pos.eur.toFixed(2)}, btc: ${pos.btc.toFixed(8)}, open: ${pos.open.toFixed(2)}, value: ${pos.value.toFixed(2)}`)
     }
-    this.history.push(this.environment.getState())
+    //this.history.push(this.environment.getState())
   }
 
   save = async (url: string) => {

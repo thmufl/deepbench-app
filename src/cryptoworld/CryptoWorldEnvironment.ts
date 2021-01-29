@@ -30,21 +30,20 @@ class CryptoWorldEnvironment {
     fees: number
     historicalData: any[] = []
     callbacks: CryptoWorldCallbacks = {}
+    previousPosition = {day: 0, date: "1970-01-01", eur: 0, btc: 0, open: 0, value: 0, action: {type: "HOLD", amount: 1.0}}
     currentPosition = {day: 0, date: "1970-01-01", eur: 0, btc: 0, open: 0, value: 0, action: {type: "HOLD", amount: 1.0}}
 
     ACTIONS = [
         { type: "HOLD", amount: 1.0 },
-        { type: "BUY", amount: 0.1 },
         { type: "BUY", amount: 0.2 },
-        { type: "BUY", amount: 0.3 },
-        { type: "BUY", amount: 0.5 },
-        { type: "BUY", amount: 0.7 },
+        { type: "BUY", amount: 0.4 },
+        { type: "BUY", amount: 0.6 },
+        { type: "BUY", amount: 0.8 },
         { type: "BUY", amount: 1.0 },
-        { type: "SELL", amount: 0.1 },
         { type: "SELL", amount: 0.2 },
-        { type: "SELL", amount: 0.3 },
-        { type: "SELL", amount: 0.5 },
-        { type: "SELL", amount: 0.7 },
+        { type: "SELL", amount: 0.4 },
+        { type: "SELL", amount: 0.6 },
+        { type: "SELL", amount: 0.8 },
         { type: "SELL", amount: 1.0 },
     ]
 
@@ -57,7 +56,8 @@ class CryptoWorldEnvironment {
 
     init = async() => {
         if(this.callbacks.onBeforeInit) this.callbacks.onBeforeInit()
-        this.historicalData = await d3.csv("/assets/BTC-EUR-TRAIN.csv")
+        this.historicalData = await d3.csv("/assets/BTC-EUR-03-06-2020.csv")
+        //this.historicalData = await d3.csv("/assets/BTC-EUR-YTD.csv")
         for(let i = 0; i < this.historicalData.length; i++) {
             if(this.historicalData[i].Open === "null" || this.historicalData[i].Open === "0.000000") this.historicalData[i].Open = this.historicalData[i-1].Close
             if(this.historicalData[i].High === "null" || this.historicalData[i].High === "0.000000") this.historicalData[i].High = this.historicalData[i-1].Close
@@ -67,16 +67,17 @@ class CryptoWorldEnvironment {
             if(this.historicalData[i].Volume === "null" || this.historicalData[i].Volume === "0.000000") this.historicalData[i].Volume = this.historicalData[i-1].Volume
         }
         for(let i = 0; i < this.historicalData.length; i++) {
-            this.historicalData[i].Open = parseFloat(this.historicalData[i].Open)
-            this.historicalData[i].High = parseFloat(this.historicalData[i].High)
-            this.historicalData[i].Low = parseFloat(this.historicalData[i].Low)
-            this.historicalData[i].Close = parseFloat(this.historicalData[i].Close)
-            this.historicalData[i]["Adj Close"] = parseFloat(this.historicalData[i]["Adj Close"])
+            this.historicalData[i].Open = Math.round(parseFloat(this.historicalData[i].Open))
+            this.historicalData[i].High = Math.round(parseFloat(this.historicalData[i].High))
+            this.historicalData[i].Low = Math.round(parseFloat(this.historicalData[i].Low))
+            this.historicalData[i].Close = Math.round(parseFloat(this.historicalData[i].Close))
+            this.historicalData[i]["Adj Close"] = Math.round(parseFloat(this.historicalData[i]["Adj Close"]))
             this.historicalData[i].Volume = parseInt(this.historicalData[i].Volume)
         }
         console.log("Historical Data", this.historicalData)
-        const price = this.historicalData[this.initialPosition.day].Open
-        this.initialPosition.value = this.initialPosition.eur + price * this.initialPosition.btc
+        const open = this.historicalData[this.initialPosition.day].Open
+        this.initialPosition.open = open
+        this.initialPosition.value = this.initialPosition.eur + open * this.initialPosition.btc
         this.reset()
         if(this.callbacks.onAfterInit) this.callbacks.onAfterInit(this.getState())
     }
@@ -112,6 +113,7 @@ class CryptoWorldEnvironment {
 
         }
         nextPosition.value = nextPosition.eur + open * nextPosition.btc
+        this.previousPosition = {...this.currentPosition}
         this.currentPosition = {...nextPosition}
         if(this.callbacks.onAfterMakeStep) this.callbacks.onAfterMakeStep(this.getState())
         return { done: this.isDone(), reward: this.getReward(), state: this.getState() }
@@ -124,7 +126,7 @@ class CryptoWorldEnvironment {
     }
 
     isValidAction = (index: number) => {
-        let action = this.ACTIONS[index]
+        const action = this.ACTIONS[index]
         switch(action.type) {
             case "BUY": return this.currentPosition.eur > 0
             case "SELL": return this.currentPosition.btc > 0
@@ -133,32 +135,43 @@ class CryptoWorldEnvironment {
     }
 
     getRandomAction = (): number => {
-        let type = Math.floor(Math.random() * 3)
-        let index = (type === 0) ? 0 : 1 + Math.floor(Math.random() * this.ACTIONS.length-1)
-        return this.isValidAction(index) ? index : this.getRandomAction() 
-    }
-
-    getReward = () => {
-        return 1e-3 * (this.currentPosition.value - this.initialPosition.value)
+        const randomAction = () => { 
+            let type = Math.floor(Math.random() * 3)
+            return type === 0 ? 0 : 1 + Math.floor(Math.random() * this.ACTIONS.length-1)
+        }
+        let action = randomAction()
+        while(!this.isValidAction(action)) {
+            action = randomAction()
+        }
+        return action;
     }
 
     isDone = () => this.currentPosition.day === this.historicalData.length - 1
+
+    getReward = () => {
+        const x = 10 * (this.currentPosition.value - this.previousPosition.value) / this.previousPosition.value
+        if (x === 0) return -10
+        if (this.isDone()) return 5 * x
+        return x
+    }
+
     getState = () => this.currentPosition
 
     getStateTensor = (): tf.Tensor2D => {
-        let data = this.historicalData[this.currentPosition.day]
-        let pos = this.currentPosition
-        const buffer = tf.buffer([1, 9])
-        buffer.set(pos.eur, 0, 0)
-        buffer.set(pos.btc, 0, 1)
-        buffer.set(pos.value, 0, 2)
-        buffer.set(data.Open, 0, 3)
-        buffer.set(data.High, 0, 4)
-        buffer.set(data.Low, 0, 5)
-        buffer.set(data.Close, 0, 6)
-        buffer.set(data.Volume / 5e6, 0, 7)
-        // buffer.toTensor().mul(1e-4).print()
-        return buffer.toTensor().mul(1e-4) //.div(50000);
+        const buffer = tf.buffer([1, 6])
+        const pos = this.currentPosition
+        // buffer.set(pos.eur, 0, 0)
+        // buffer.set(pos.btc, 0, 1)
+        // buffer.set(pos.value, 0, 2)
+        const data = this.historicalData[this.currentPosition.day]
+        buffer.set(data.Open, 0, 0)
+        buffer.set(data.High, 0, 1)
+        buffer.set(data.Low, 0, 2)
+        buffer.set(data.Close, 0, 3)
+        buffer.set(data.Volume * 1e-7, 0, 4)
+        buffer.set(1 - (pos.value - pos.eur) / (pos.eur + 1), 0, 5) // btc investment ratio
+        //buffer.toTensor().mul(1e-4).print()
+        return buffer.toTensor().mul(1e-4)
     }
 }
 

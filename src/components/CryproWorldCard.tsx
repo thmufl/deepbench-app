@@ -8,7 +8,7 @@ import CryptoWorldComponent from "./CryptoWorldComponent"
 
 const CryptoWorldCard = () => {
 
-    const environment = new CryptoWorldEnvironment({day: 0, date: "1970-01-01", eur: 10000, btc: 0, open: 0, value: 10000, action: {type: "NULL", amount: 1.0}}, 0.025)
+    const environment = new CryptoWorldEnvironment({day: 0, date: "1970-01-01", eur: 10000, btc: 0, open: 0, value: 0, action: {type: "NULL", amount: 1.0}}, 0.025)
     const agent = new CryptoWorldAgent(environment)
     return (
         <Card style={{ width: "auto" }}>
